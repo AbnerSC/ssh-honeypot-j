@@ -8,6 +8,7 @@
     <artifactId>ssh-honeypot</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
+    <description>SSH 蜜罐</description>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
