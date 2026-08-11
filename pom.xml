@@ -23,6 +23,12 @@
             <artifactId>sshd-core</artifactId>
             <version>${sshd.version}</version>
         </dependency>
+        <!-- 显式锁定 slf4j-api 2.x，避免 sshd-core 传递的 1.7.x 导致 StaticLoggerBinder 警告 -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.13</version>
+        </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-jdk14</artifactId>
