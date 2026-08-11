@@ -31,7 +31,8 @@ public class TelnetHoneypotServer {
     private final VirtualFileSystem fs;
     private final AttackLogger logger;
     private final CommandProcessor processor;
-    private final ExecutorService pool = Executors.newCachedThreadPool();
+    /** 虚拟线程执行器：每个连接一条虚拟线程，替代 cachedThreadPool 平台线程，大幅降低并发连接内存开销 */
+    private final ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
     private volatile boolean running = true;
     private ServerSocket serverSocket;
 
@@ -69,7 +70,7 @@ public class TelnetHoneypotServer {
         String sessionId = logger.newSessionId();
         logger.sessionOpen(sessionId, "telnet", ip, clientPort);
         long start = System.currentTimeMillis();
-        try {
+        try (socket) {
             socket.setSoTimeout(10 * 60 * 1000); // 10 分钟无操作自动断开
             PushbackInputStream in = new PushbackInputStream(socket.getInputStream(), 1);
             OutputStream out = socket.getOutputStream();
@@ -95,8 +96,6 @@ public class TelnetHoneypotServer {
 
         } catch (IOException e) {
             logger.sessionClose(sessionId, ip, System.currentTimeMillis() - start);
-        } finally {
-            try { socket.close(); } catch (IOException ignored) {}
         }
     }
 

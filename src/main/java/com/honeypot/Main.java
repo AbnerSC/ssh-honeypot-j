@@ -7,6 +7,7 @@ import com.honeypot.ssh.SshHoneypotServer;
 import com.honeypot.telnet.TelnetHoneypotServer;
 
 import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -56,7 +57,7 @@ public class Main {
 
         System.out.println("""
                 ================================================
-                  SSH/Telnet 蜜罐  v1.0  (Java 21)
+                  SSH/Telnet 蜜罐  v1.1  (Java 25)
                   仅用于安全研究与授权环境，请勿用于非法用途
                 ================================================
                 """);
@@ -83,6 +84,7 @@ public class Main {
         System.out.println("按 Ctrl+C 停止。");
 
         // 优雅关闭
+        CountDownLatch shutdown = new CountDownLatch(1);
         SshHoneypotServer finalSsh = sshServer;
         TelnetHoneypotServer finalTelnet = telnetServer;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -90,9 +92,10 @@ public class Main {
             try { if (finalSsh != null) finalSsh.stop(); } catch (Exception ignored) {}
             if (finalTelnet != null) finalTelnet.stop();
             try { attackLogger.close(); } catch (Exception ignored) {}
-        }));
+            shutdown.countDown();
+        }, "honeypot-shutdown"));
 
-        Thread.currentThread().join(); // 主线程挂起
+        shutdown.await(); // 主线程挂起直到关闭完成
     }
 
     private static void printUsage() {

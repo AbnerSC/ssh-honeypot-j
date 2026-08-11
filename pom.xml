@@ -11,7 +11,7 @@
     <description>SSH 蜜罐</description>
 
     <properties>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <sshd.version>2.12.1</sshd.version>
     </properties>
@@ -57,6 +57,11 @@
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.honeypot.Main</mainClass>
+                                    <manifestEntries>
+                                        <!-- JDK 25 运行时优化：紧凑对象头(JEP 519)、禁用遗留 finalization(JEP 513) -->
+                                        <Add-Opens>java.base/java.lang</Add-Opens>
+                                        <JVM-Options>-XX:+UseCompactObjectHeaders -XX:-EnableFinalization</JVM-Options>
+                                    </manifestEntries>
                                 </transformer>
                             </transformers>
                         </configuration>

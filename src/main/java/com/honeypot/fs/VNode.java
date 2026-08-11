@@ -1,5 +1,6 @@
 package com.honeypot.fs;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -20,6 +21,7 @@ public class VNode {
     public final String perms;          // 例如 "rw-r--r--" / "rwxr-xr-x"
     public final LocalDateTime mtime;
     private String content;             // 文件内容（仅文件）
+    private int cachedSize = -1;        // 内容字节数惰性缓存，避免 ls -l 重复 getBytes()
     private final Map<String, VNode> children = new LinkedHashMap<>(); // 子节点（仅目录）
 
     private VNode(String name, boolean directory, String perms, String owner, String group, LocalDateTime mtime) {
@@ -66,11 +68,15 @@ public class VNode {
 
     public void content(String c) {
         this.content = c;
+        this.cachedSize = -1;           // 内容变更，失效缓存
     }
 
     public long size() {
         if (directory) return 4096;
-        return content == null ? 128 : content.getBytes().length;
+        if (content == null) return 128;
+        int s = cachedSize;
+        if (s < 0) cachedSize = s = content.getBytes(StandardCharsets.UTF_8).length;
+        return s;
     }
 
     /** ls -l 单行展示 */

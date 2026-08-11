@@ -136,9 +136,8 @@ public class SshHoneypotServer {
 
             shell = new FakeShell(in, out, state, processor, logger,
                     st -> callback.onExit(0));
-            thread = new Thread(shell::run, "ssh-shell-" + state.sessionId);
-            thread.setDaemon(true);
-            thread.start();
+            // 虚拟线程：每个交互会话一条，海量并发下几乎零调度开销
+            thread = Thread.ofVirtual().name("ssh-shell-" + state.sessionId).start(shell::run);
         }
 
         @Override
@@ -172,7 +171,8 @@ public class SshHoneypotServer {
 
         @Override
         public void start(ChannelSession ch, Environment env) {
-            thread = new Thread(() -> {
+            // 虚拟线程：exec 攻击通常短平快，虚拟线程创建/销毁成本可忽略
+            thread = Thread.ofVirtual().name("ssh-exec").start(() -> {
                 try {
                     Session session = channel.getSession();
                     String username = sessionUsers.getOrDefault(sessionKey(session), "root");
@@ -187,9 +187,7 @@ public class SshHoneypotServer {
                 } finally {
                     callback.onExit(0);
                 }
-            }, "ssh-exec");
-            thread.setDaemon(true);
-            thread.start();
+            });
         }
 
         @Override
