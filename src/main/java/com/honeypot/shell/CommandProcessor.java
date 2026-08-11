@@ -102,7 +102,7 @@ public class CommandProcessor {
             case "top", "htop" -> top();
             case "history" -> history(st);
             case "env", "printenv", "set", "export" -> env(st);
-            case "date" -> LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss 'CST' yyyy"));
+            case "date" -> LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             case "df" -> df();
             case "free" -> free();
             case "clear" -> "\033[H\033[2J\033[3J";
