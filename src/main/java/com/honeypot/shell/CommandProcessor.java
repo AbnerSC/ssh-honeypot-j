@@ -440,7 +440,7 @@ public class CommandProcessor {
     private String ifconfig() {
         return """
                 eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-                        inet 10.0.0.15  netmask 255.255.255.0  broadcast 10.0.0.255
+                        inet 10.23.76.15  netmask 255.255.255.0  broadcast 10.0.0.255
                         inet6 fe80::215:5dff:fe00:1a2b  prefixlen 64  scopeid 0x20<link>
                         ether 00:15:5d:00:1a:2b  txqueuelen 1000  (Ethernet)
                         RX packets 18492653  bytes 21412405712 (21.4 GB)
@@ -461,10 +461,10 @@ public class CommandProcessor {
                     1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
                         inet 127.0.0.1/8 scope host lo
                     2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
-                        inet 10.0.0.15/24 brd 10.0.0.255 scope global eth0""";
+                        inet 10.23.76.15/24 brd 10.0.0.255 scope global eth0""";
         }
         if (sub.equals("route") || sub.equals("r")) {
-            return "default via 10.0.0.1 dev eth0 proto static\n10.0.0.0/24 dev eth0 proto kernel scope link src 10.0.0.15";
+            return "default via 10.0.0.1 dev eth0 proto static\n10.0.0.0/24 dev eth0 proto kernel scope link src 10.23.76.15";
         }
         return "";
     }
@@ -476,7 +476,7 @@ public class CommandProcessor {
                 tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN
                 tcp        0      0 0.0.0.0:3306            0.0.0.0:*               LISTEN
                 tcp        0      0 0.0.0.0:80              0.0.0.0:*               LISTEN
-                tcp        0    288 10.0.0.15:22            10.0.0.99:51220         ESTABLISHED
+                tcp        0    288 10.23.76.15:22          10.0.0.99:51220         ESTABLISHED
                 udp        0      0 0.0.0.0:68              0.0.0.0:*""";
     }
 
