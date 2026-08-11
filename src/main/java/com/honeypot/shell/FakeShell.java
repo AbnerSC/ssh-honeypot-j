@@ -102,7 +102,7 @@ public class FakeShell {
             pendingLF = false;
 
             if (b == BS || b == DEL) {
-                if (buf.length() > 0) {
+                if (!buf.isEmpty()) {
                     buf.setLength(buf.length() - 1);
                     writeRaw("\b \b");
                 }
@@ -113,7 +113,7 @@ public class FakeShell {
                 return "";
             }
             if (b == CTRL_D) {
-                if (buf.length() == 0) return null;   // 空行按 Ctrl-D = 登出
+                if (buf.isEmpty()) return null;   // 空行按 Ctrl-D = 登出
                 continue;
             }
             if (b < 0x20) continue;                   // 忽略其它控制字符

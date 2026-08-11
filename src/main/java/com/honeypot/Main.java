@@ -1,7 +1,6 @@
 package com.honeypot;
 
 import com.honeypot.config.HoneypotConfig;
-import com.honeypot.config.HoneypotConfig;
 import com.honeypot.fs.VirtualFileSystem;
 import com.honeypot.log.AttackLogger;
 import com.honeypot.ssh.SshHoneypotServer;
@@ -15,16 +14,16 @@ import java.util.logging.SimpleFormatter;
 
 /**
  * SSH/Telnet 蜜罐主入口。
- *
+ * <p>
  * 用法:
  *   java -jar ssh-honeypot.jar [选项]
- *
+ * <p>
  * 选项:
  *   --config <file>       YAML 配置文件路径（默认 config.yaml）
  *   -h, --help            显示帮助
- *
+ * <p>
  * 配置文件格式见 config.yaml，支持 ssh/telnet 开关、端口与日志路径。
- *
+ * <p>
  * 生产部署提示：Linux 下用 root 直接监听 22/23，或用 iptables 转发：
  *   iptables -t nat -A PREROUTING -p tcp --dport 22 -j REDIRECT --to-port 2222
  *   iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323

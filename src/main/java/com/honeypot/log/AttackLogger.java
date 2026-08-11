@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  */
 public class AttackLogger implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(AttackLogger.class.getName());
-    private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
+    private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
     private final BufferedWriter writer;
     private final AtomicLong sessionSeq = new AtomicLong();

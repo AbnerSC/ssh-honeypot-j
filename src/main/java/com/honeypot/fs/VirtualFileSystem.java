@@ -104,6 +104,101 @@ public class VirtualFileSystem {
         return parent.children().remove(abs.substring(idx + 1)) != null;
     }
 
+    /** 写入/创建文件内容：文件不存在则创建，存在则覆盖 */
+    public boolean write(String cwd, String path, String user, String content) {
+        String abs = normalize(cwd, path);
+        int idx = abs.lastIndexOf('/');
+        VNode parent = resolve("/", idx == 0 ? "/" : abs.substring(0, idx));
+        if (parent == null || !parent.directory) return false;
+        String name = abs.substring(idx + 1);
+        if (name.isEmpty()) return false;
+        VNode existing = parent.child(name);
+        if (existing == null) {
+            parent.add(VNode.file(name, "rw-r--r--", user, content));
+        } else {
+            if (existing.directory) return false;
+            existing.content(content);
+        }
+        return true;
+    }
+
+    /** 移动/重命名节点，成功返回 true */
+    public boolean move(String cwd, String src, String dst) {
+        String srcAbs = normalize(cwd, src);
+        if (srcAbs.equals("/")) return false;
+        int sIdx = srcAbs.lastIndexOf('/');
+        VNode srcParent = resolve("/", sIdx == 0 ? "/" : srcAbs.substring(0, sIdx));
+        if (srcParent == null || !srcParent.directory) return false;
+        String srcName = srcAbs.substring(sIdx + 1);
+        VNode node = srcParent.child(srcName);
+        if (node == null) return false;
+
+        String dstAbs = normalize(cwd, dst);
+        int dIdx = dstAbs.lastIndexOf('/');
+        VNode dstParent = resolve("/", dIdx == 0 ? "/" : dstAbs.substring(0, dIdx));
+        String dstName = dstAbs.substring(dIdx + 1);
+        if (dstName.isEmpty()) return false;
+        if (dstParent == null) return false;
+        if (dstParent.directory && dstParent.child(dstName) != null) {
+            VNode inDst = dstParent.child(dstName);
+            if (inDst.directory) {
+                // 目标为已存在目录：移入其中（cp/mv 的标准行为）
+                if (inDst.child(srcName) != null) return false;
+                srcParent.children().remove(srcName);
+                inDst.add(rename(node, srcName));
+                return true;
+            }
+            return false; // 目标是已存在的文件
+        }
+        if (dstParent.directory) {
+            srcParent.children().remove(srcName);
+            dstParent.add(rename(node, dstName));
+            return true;
+        }
+        return false;
+    }
+
+    /** 深拷贝节点（文件复制内容，目录递归复制） */
+    public boolean copy(String cwd, String src, String dst) {
+        VNode node = resolve(cwd, src);
+        if (node == null) return false;
+        String dstAbs = normalize(cwd, dst);
+        int dIdx = dstAbs.lastIndexOf('/');
+        VNode dstParent = resolve("/", dIdx == 0 ? "/" : dstAbs.substring(0, dIdx));
+        String dstName = dstAbs.substring(dIdx + 1);
+        if (dstParent == null || !dstParent.directory) return false;
+        VNode existing = dstParent.child(dstName);
+        if (existing != null && existing.directory) {
+            // 目标是目录：拷贝进其中，保持原名
+            if (existing.child(node.name) != null) {
+                existing.children().remove(node.name);
+            }
+            existing.add(cloneNode(node, node.name));
+            return true;
+        }
+        if (dstName.isEmpty()) return false;
+        dstParent.children().remove(dstName);
+        dstParent.add(cloneNode(node, dstName));
+        return true;
+    }
+
+    private VNode rename(VNode node, String newName) {
+        if (node.name.equals(newName)) return node;
+        VNode copy = cloneNode(node, newName);
+        return copy;
+    }
+
+    private VNode cloneNode(VNode node, String newName) {
+        VNode copy;
+        if (node.directory) {
+            copy = VNode.dir(newName, node.perms, node.owner);
+            node.children().values().forEach(c -> copy.add(cloneNode(c, c.name)));
+        } else {
+            copy = VNode.file(newName, node.perms, node.owner, node.content());
+        }
+        return copy;
+    }
+
     /* ------------------------------------------------------------------ */
     /* 构造伪装的 Linux 文件系统                                             */
     /* ------------------------------------------------------------------ */
