@@ -1,5 +1,7 @@
 package com.honeypot;
 
+import com.honeypot.config.HoneypotConfig;
+import com.honeypot.config.HoneypotConfig;
 import com.honeypot.fs.VirtualFileSystem;
 import com.honeypot.log.AttackLogger;
 import com.honeypot.ssh.SshHoneypotServer;
@@ -18,11 +20,10 @@ import java.util.logging.SimpleFormatter;
  *   java -jar ssh-honeypot.jar [选项]
  *
  * 选项:
- *   --ssh-port <port>     SSH 监听端口（默认 2222）
- *   --telnet-port <port>  Telnet 监听端口（默认 2323）
- *   --no-ssh              禁用 SSH 服务
- *   --no-telnet           禁用 Telnet 服务
- *   --log <file>          攻击日志文件（默认 logs/honeypot.jsonl）
+ *   --config <file>       YAML 配置文件路径（默认 config.yaml）
+ *   -h, --help            显示帮助
+ *
+ * 配置文件格式见 config.yaml，支持 ssh/telnet 开关、端口与日志路径。
  *
  * 生产部署提示：Linux 下用 root 直接监听 22/23，或用 iptables 转发：
  *   iptables -t nat -A PREROUTING -p tcp --dport 22 -j REDIRECT --to-port 2222
@@ -30,23 +31,20 @@ import java.util.logging.SimpleFormatter;
  */
 public class Main {
     public static void main(String[] args) throws Exception {
-        int sshPort = 2222;
-        int telnetPort = 2323;
-        boolean sshEnabled = true;
-        boolean telnetEnabled = true;
-        Path logFile = Path.of("logs", "honeypot.jsonl");
+        String configPath = HoneypotConfig.DEFAULT_CONFIG_FILE;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
-                case "--ssh-port" -> sshPort = Integer.parseInt(args[++i]);
-                case "--telnet-port" -> telnetPort = Integer.parseInt(args[++i]);
-                case "--no-ssh" -> sshEnabled = false;
-                case "--no-telnet" -> telnetEnabled = false;
-                case "--log" -> logFile = Path.of(args[++i]);
+                case "--config", "-c" -> configPath = args[++i];
                 case "--help", "-h" -> { printUsage(); return; }
                 default -> System.err.println("未知参数: " + args[i]);
             }
         }
+
+        HoneypotConfig config = HoneypotConfig.load(configPath);
+        boolean sshEnabled = config.getSsh().isEnabled();
+        boolean telnetEnabled = config.getTelnet().isEnabled();
+        Path logFile = Path.of(config.getLog().getFile());
 
         // 日志格式精简
         Logger root = Logger.getLogger("");
@@ -71,17 +69,17 @@ public class Main {
         TelnetHoneypotServer telnetServer = null;
 
         if (sshEnabled) {
-            sshServer = new SshHoneypotServer(sshPort, fs, attackLogger);
+            sshServer = new SshHoneypotServer(config.getSsh().getPort(), fs, attackLogger);
             sshServer.start();
         }
         if (telnetEnabled) {
-            telnetServer = new TelnetHoneypotServer(telnetPort, fs, attackLogger);
+            telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger);
             telnetServer.start();
         }
 
         System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, 日志=%s%n",
-                sshEnabled ? String.valueOf(sshPort) : "关闭",
-                telnetEnabled ? String.valueOf(telnetPort) : "关闭",
+                sshEnabled ? String.valueOf(config.getSsh().getPort()) : "关闭",
+                telnetEnabled ? String.valueOf(config.getTelnet().getPort()) : "关闭",
                 logFile.toAbsolutePath());
         System.out.println("按 Ctrl+C 停止。");
 
@@ -101,11 +99,18 @@ public class Main {
     private static void printUsage() {
         System.out.println("""
                 用法: java -jar ssh-honeypot.jar [选项]
-                  --ssh-port <port>     SSH 监听端口（默认 2222）
-                  --telnet-port <port>  Telnet 监听端口（默认 2323）
-                  --no-ssh              禁用 SSH 服务
-                  --no-telnet           禁用 Telnet 服务
-                  --log <file>          攻击日志文件（默认 logs/honeypot.jsonl）
+                  -c, --config <file>   YAML 配置文件路径（默认 config.yaml）
+                  -h, --help            显示帮助
+
+                配置文件格式 (config.yaml):
+                  ssh:
+                    enabled: true        # 是否启用 SSH 服务
+                    port: 2222           # SSH 监听端口
+                  telnet:
+                    enabled: true        # 是否启用 Telnet 服务
+                    port: 2323           # Telnet 监听端口
+                  log:
+                    file: logs/honeypot.jsonl   # 攻击日志文件路径
                 """);
     }
 }

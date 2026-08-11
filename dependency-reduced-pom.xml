@@ -4,6 +4,7 @@
   <groupId>com.honeypot</groupId>
   <artifactId>ssh-honeypot</artifactId>
   <version>1.0.0</version>
+  <description>SSH 蜜罐</description>
   <build>
     <finalName>ssh-honeypot</finalName>
     <plugins>

@@ -33,11 +33,26 @@ mvn package
 ## 运行
 
 ```bash
-java -jar target/ssh-honeypot.jar                    # 默认 SSH:2222 Telnet:2323
-java -jar target/ssh-honeypot.jar --ssh-port 2222 --telnet-port 2323
-java -jar target/ssh-honeypot.jar --no-telnet        # 只开 SSH
-java -jar target/ssh-honeypot.jar --log /var/log/honeypot.jsonl
+java -jar target/ssh-honeypot.jar                        # 使用默认 config.yaml
+java -jar target/ssh-honeypot.jar -c /etc/honeypot.yaml  # 指定配置文件
 ```
+
+### 配置文件（config.yaml）
+
+```yaml
+ssh:
+  enabled: true      # 是否启用 SSH 服务
+  port: 2222         # SSH 监听端口
+
+telnet:
+  enabled: true      # 是否启用 Telnet 服务
+  port: 2323         # Telnet 监听端口
+
+log:
+  file: logs/honeypot.jsonl   # 攻击日志文件路径
+```
+
+配置文件不存在时使用内置默认值（SSH:2222、Telnet:2323、日志 logs/honeypot.jsonl）。
 
 ### 映射到真实 22/23 端口（Linux）
 
@@ -72,7 +87,8 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 
 ```
 src/main/java/com/honeypot/
-├── Main.java                      # 入口：参数解析、启动服务、优雅关闭
+├── Main.java                      # 入口：加载配置、启动服务、优雅关闭
+├── config/HoneypotConfig.java     # YAML 配置加载（默认 config.yaml）
 ├── fs/
 │   ├── VNode.java                 # 虚拟文件节点
 │   └── VirtualFileSystem.java     # 内存文件系统（伪装 Ubuntu）
