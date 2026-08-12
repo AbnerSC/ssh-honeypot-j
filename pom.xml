@@ -113,7 +113,6 @@
                                     <exec>
                                         <arg>java</arg>
                                         <arg>-XX:+UseCompactObjectHeaders</arg>
-                                        <arg>-XX:-EnableFinalization</arg>
                                         <arg>-jar</arg>
                                         <arg>app.jar</arg>
                                     </exec>
