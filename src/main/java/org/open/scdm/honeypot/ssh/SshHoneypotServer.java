@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -53,6 +54,12 @@ public class SshHoneypotServer {
         sshd = SshServer.setUpDefaultServer();
         sshd.setPort(port);
         CoreModuleProperties.SERVER_IDENTIFICATION.set(sshd, "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.4");
+        // 心跳探测：攻击端直接断开（无 TCP FIN、无 SSH 断开报文）时，
+        // 靠 keepalive 主动发现死连接并触发通道销毁，保证 session_close 被记录
+        // （间隔 > 0 即启用心跳；连续 2 次无应答判定连接死亡）
+        CoreModuleProperties.HEARTBEAT_INTERVAL.set(sshd, Duration.ofSeconds(30));
+        CoreModuleProperties.HEARTBEAT_REPLY_WAIT.set(sshd, Duration.ofSeconds(10));
+        CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(sshd, 2);
         sshd.setKeyPairProvider(new SimpleGeneratorHostKeyProvider(Path.of("hostkey.ser")));
 
         // 密码认证：全部放行并记录
@@ -142,7 +149,13 @@ public class SshHoneypotServer {
 
         @Override
         public void destroy(ChannelSession ch) {
-            if (shell != null) shell.stop();
+            if (shell != null) {
+                shell.stop();
+                // 兜底：客户端直接断开终端连接时读循环可能阻塞不返回，
+                // 在此保证 session_close 恰好记录一次（幂等）
+                shell.ensureClosed();
+            }
+            sessionUsers.remove(sessionKey(channel.getSession())); // 清理登录映射，避免内存泄漏
             if (thread != null) thread.interrupt();
             try { if (in != null) in.close(); } catch (IOException ignored) {}
         }
@@ -192,6 +205,7 @@ public class SshHoneypotServer {
 
         @Override
         public void destroy(ChannelSession ch) {
+            sessionUsers.remove(sessionKey(channel.getSession())); // 清理登录映射，避免内存泄漏
             if (thread != null) thread.interrupt();
         }
     }

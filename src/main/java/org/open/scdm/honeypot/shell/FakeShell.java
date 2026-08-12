@@ -8,6 +8,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -26,6 +27,9 @@ public class FakeShell {
     private final Consumer<SessionState> onExit;   // 会话结束回调（协议层负责关闭连接）
 
     private volatile boolean running = true;
+    /** session_close 只记录一次（正常退出/异常断开/destroy 可能并发触发） */
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private final long startMillis = System.currentTimeMillis();
     private final List<String> historyNav = new ArrayList<>();
     private int historyIdx = -1;
     private boolean pendingLF = false;   // 上一行以 \r 结束，下一个 \n 需要吞掉
@@ -46,7 +50,6 @@ public class FakeShell {
 
     /** 主循环（阻塞），应在独立线程中调用 */
     public void run() {
-        long start = System.currentTimeMillis();
         try {
             printBanner();
             while (running) {
@@ -60,10 +63,22 @@ public class FakeShell {
             }
         } catch (IOException e) {
             // 攻击者断开连接，正常情况
+        } catch (Exception e) {
+            // 流被协议层关闭等其它异常，同样视为会话结束
         } finally {
-            running = false;
-            logger.sessionClose(state.sessionId, state.ip, System.currentTimeMillis() - start);
+            ensureClosed();
             try { onExit.accept(state); } catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * 幂等关闭：无论正常 exit、Ctrl-D、连接异常断开还是协议层 destroy，
+     * 都保证 session_close 事件恰好记录一次。
+     */
+    public void ensureClosed() {
+        running = false;
+        if (closed.compareAndSet(false, true)) {
+            logger.sessionClose(state.sessionId, state.ip, System.currentTimeMillis() - startMillis);
         }
     }
 

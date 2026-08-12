@@ -35,7 +35,6 @@
   </build>
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
-    <sshd.version>2.12.1</sshd.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 </project>
