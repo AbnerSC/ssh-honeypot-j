@@ -4,11 +4,11 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.honeypot</groupId>
-    <artifactId>ssh-honeypot</artifactId>
-    <version>1.0.0</version>
+    <groupId>org.open.scdm</groupId>
+    <artifactId>ssh-honeypot-j</artifactId>
+    <version>1.0.1</version>
     <packaging>jar</packaging>
-    <description>SSH 蜜罐</description>
+    <description>Java版本 SSH 蜜罐</description>
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>

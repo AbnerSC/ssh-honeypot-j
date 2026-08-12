@@ -11,7 +11,7 @@ import java.nio.file.Path;
 
 /**
  * YAML 配置加载。
- *
+ * <p>
  * 配置文件结构示例:
  * <pre>
  * ssh:

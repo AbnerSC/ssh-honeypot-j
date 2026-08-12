@@ -30,7 +30,7 @@ import java.util.logging.SimpleFormatter;
  *   iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
  */
 public class Main {
-    public static void main(String[] args) throws Exception {
+    static void main(String[] args) throws Exception {
         String configPath = HoneypotConfig.DEFAULT_CONFIG_FILE;
 
         for (int i = 0; i < args.length; i++) {

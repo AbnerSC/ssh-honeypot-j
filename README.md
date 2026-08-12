@@ -27,20 +27,20 @@
 ```bash
 # 需要 JDK 25+
 mvn package
-# 产物：target/ssh-honeypot.jar（含全部依赖的可执行 jar）
+# 产物：target/ssh-honeypot-j.jar（含全部依赖的可执行 jar）
 ```
 
 ## 运行
 
 ```bash
-java -jar target/ssh-honeypot.jar                        # 使用默认 config.yaml
-java -jar target/ssh-honeypot.jar -c /etc/honeypot.yaml  # 指定配置文件
+java -jar target/ssh-honeypot-j.jar                        # 使用默认 config.yaml
+java -jar target/ssh-honeypot-j.jar -c /etc/honeypot.yaml  # 指定配置文件
 ```
 
 生产环境建议叠加 JDK 25 运行时优化参数（紧凑对象头，减少海量会话对象内存占用）：
 
 ```bash
-java -XX:+UseCompactObjectHeaders -jar target/ssh-honeypot.jar
+java -XX:+UseCompactObjectHeaders -jar target/ssh-honeypot-j.jar
 ```
 
 ### 配置文件（config.yaml）
