@@ -1,6 +1,6 @@
 # SSH/Telnet 蜜罐 (Java 25)
 
-一款交互式蜜罐，用于捕获针对服务器的 SSH/Telnet 暴力破解与入侵行为。
+一款 ***中交互*** 蜜罐，用于捕获针对服务器的 SSH/Telnet 暴力破解与入侵行为。
 基于 **Apache MINA SSHD** 实现 SSH 协议，原生 Socket 实现 Telnet 协议，
 内置伪装的 Ubuntu 22.04 虚拟文件系统与伪 Shell。
 
