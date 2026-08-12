@@ -147,3 +147,11 @@ src/main/java/com/honeypot/
 ├── telnet/TelnetHoneypotServer.java # Telnet 服务（原生 Socket）
 └── log/AttackLogger.java          # JSONL 攻击日志
 ```
+
+## 支持诱捕清单
+- [X] SSH
+- [X] Telnet
+- [ ] MySQL
+- [ ] PostgreSQL
+- [ ] Http(Nginx)
+- [ ] Redis
