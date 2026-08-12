@@ -13,16 +13,23 @@
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- ============ Docker 镜像配置 ============ -->
+        <!-- 基础镜像（若本地无该镜像且需从 Nexus 拉取，可用 -Ddocker.baseImage=repo.pi.mmxx.fun/docker-releases-amd64/openjdk:25-ea-oracle 覆盖） -->
+        <docker.baseImage>openjdk:25-ea-oracle</docker.baseImage>
+        <!-- Nexus Docker 仓库（host/repository 形式） -->
+        <docker.registry>repo.pi.mmxx.fun/docker-releases-amd64</docker.registry>
+        <docker.image>${docker.registry}/${project.artifactId}:${project.version}</docker.image>
+        <!-- 仓库认证凭据配置在 ~/.m2/settings.xml 的 <servers> 中，id 为 ${docker.registry} 的主机名部分 -->
+        <!-- mvn deploy 仅构建并推送 Docker 镜像，不发布 jar 到 Maven 仓库 -->
+        <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
 
     <dependencies>
-        <!-- Apache MINA SSHD: SSH 服务端 -->
         <dependency>
             <groupId>org.apache.sshd</groupId>
             <artifactId>sshd-core</artifactId>
             <version>2.19.0</version>
         </dependency>
-        <!-- 显式锁定 slf4j-api 2.x，避免 sshd-core 传递的 1.7.x 导致 StaticLoggerBinder 警告 -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -33,7 +40,6 @@
             <artifactId>slf4j-jdk14</artifactId>
             <version>2.0.18</version>
         </dependency>
-        <!-- SnakeYAML: YAML 配置文件解析 -->
         <dependency>
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
@@ -64,6 +70,71 @@
                                 </transformer>
                             </transformers>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Docker 镜像构建/推送插件：
+                 mvn package  -> 仅打包 jar，不构建镜像（避免本地无 Docker 时失败）
+                 mvn deploy   -> 构建本地 Docker 镜像并推送到 Nexus 仓库 -->
+            <plugin>
+                <groupId>io.fabric8</groupId>
+                <artifactId>docker-maven-plugin</artifactId>
+                <version>0.46.0</version>
+                <configuration>
+                    <images>
+                        <image>
+                            <name>${docker.image}</name>
+                            <build>
+                                <from>${docker.baseImage}</from>
+                                <workdir>/app</workdir>
+                                <assembly>
+                                    <targetDir>/app</targetDir>
+                                    <inline>
+                                        <files>
+                                            <file>
+                                                <source>${project.build.directory}/${project.build.finalName}.jar</source>
+                                                <destName>app.jar</destName>
+                                                <fileMode>0644</fileMode>
+                                            </file>
+                                            <file>
+                                                <source>${project.basedir}/config.yaml</source>
+                                                <destName>config.yaml</destName>
+                                                <fileMode>0644</fileMode>
+                                            </file>
+                                        </files>
+                                    </inline>
+                                </assembly>
+                                <!-- JVM 参数与 MANIFEST 中 JVM-Options 保持一致 -->
+                                <entryPoint>
+                                    <exec>
+                                        <arg>java</arg>
+                                        <arg>-XX:+UseCompactObjectHeaders</arg>
+                                        <arg>-XX:-EnableFinalization</arg>
+                                        <arg>-jar</arg>
+                                        <arg>app.jar</arg>
+                                    </exec>
+                                </entryPoint>
+                                <ports>
+                                    <port>2222</port>
+                                    <port>2323</port>
+                                </ports>
+                                <volumes>
+                                    <volume>/app/logs</volume>
+                                </volumes>
+                            </build>
+                        </image>
+                    </images>
+                    <!-- 仓库认证：从 ~/.m2/settings.xml 的 <servers> 中读取（id = ${docker.registry} 的主机名） -->
+                </configuration>
+                <executions>
+                    <!-- mvn deploy 时构建镜像并推送到 Nexus 仓库 -->
+                    <execution>
+                        <id>docker-build-push</id>
+                        <phase>deploy</phase>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>push</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>
