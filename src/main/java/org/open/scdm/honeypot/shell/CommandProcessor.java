@@ -531,30 +531,34 @@ public class CommandProcessor {
         boolean h = args.stream().anyMatch(a -> a.startsWith("-") && a.contains("h"));
         if (h) {
             return """
-                    Filesystem      Size  Used Avail Use% Mounted on
-                    /dev/sda1        79G   31G   44G  42% /
-                    tmpfs             3.9G     0  3.9G   0% /dev/shm
-                    /dev/sdb1        99G   18G   76G  19% /data""";
+                    Filesystem      Size  Used  Avail  Use%  Mounted on
+                    /dev/sda1       79G   31G   44G    42%   /
+                    tmpfs           3.9G  0     3.9G   0%    /dev/shm
+                    /dev/sdb1       99G   18G   76G    19%   /data
+                    """;
         }
         return """
-                Filesystem      1K-blocks     Used Available Use% Mounted on
-                /dev/sda1        82559280 32471164  45875896  42% /
-                tmpfs             4080572        0   4080572   0% /dev/shm
-                /dev/sdb1       103080232 18495632  79342184  19% /data""";
+                Filesystem      1K-blocks     Used       Available  Use%   Mounted on
+                /dev/sda1       82559280      32471164   45875896   42%    /
+                tmpfs           4080572       0          4080572    0%     /dev/shm
+                /dev/sdb1       103080232     18495632   79342184   19%    /data
+                """;
     }
 
     private String free(List<String> args) {
         boolean h = args.stream().anyMatch(a -> a.startsWith("-") && a.contains("h"));
         if (h) {
             return """
-                               total        used        free      shared  buff/cache   available
-                    Mem:        7.8Gi        2.7Gi        2.3Gi        12Mi        2.8Gi        5.1Gi
-                    Swap:       2.0Gi          0B        2.0Gi""";
+                               total        used        free      shared   buff/cache    available
+                    Mem:       7.8Gi       2.7Gi       2.3Gi        12Mi        2.8Gi        5.1Gi
+                    Swap:      2.0Gi          0B       2.0Gi
+                    """;
         }
         return """
-                          total        used        free      shared  buff/cache   available
-                Mem:        8161148     2816532     2415688       12460     2928928     5341560
-                Swap:       2097148           0     2097148""";
+                            total        used        free      shared    buff/cache   available
+                Mem:      8161148     2816532     2415688       12460       2928928     5341560
+                Swap:     2097148           0     2097148
+                """;
     }
 
     private String vmstat() {
