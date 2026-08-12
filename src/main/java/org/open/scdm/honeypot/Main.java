@@ -57,7 +57,7 @@ public class Main {
 
         System.out.println("""
                 ================================================
-                  SSH/Telnet 蜜罐  v1.1  (Java 25)
+                  SSH/Telnet 蜜罐  v1.0.2  (Java 25)
                   仅用于安全研究与授权环境，请勿用于非法用途
                 ================================================
                 """);
@@ -103,16 +103,6 @@ public class Main {
                 用法: java -jar ssh-honeypot.jar [选项]
                   -c, --config <file>   YAML 配置文件路径（默认 config.yaml）
                   -h, --help            显示帮助
-
-                配置文件格式 (config.yaml):
-                  ssh:
-                    enabled: true        # 是否启用 SSH 服务
-                    port: 2222           # SSH 监听端口
-                  telnet:
-                    enabled: true        # 是否启用 Telnet 服务
-                    port: 2323           # Telnet 监听端口
-                  log:
-                    file: logs/honeypot.jsonl   # 攻击日志文件路径
                 """);
     }
 }
