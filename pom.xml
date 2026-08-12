@@ -17,7 +17,7 @@
         <!-- 基础镜像（若本地无该镜像且需从 Nexus 拉取，可用 -Ddocker.baseImage=repo.pi.mmxx.fun/docker-releases-amd64/openjdk:25-ea-oracle 覆盖） -->
         <docker.baseImage>openjdk:25-ea-oracle</docker.baseImage>
         <!-- Nexus Docker 仓库（host/repository 形式） -->
-        <docker.registry>repo.pi.mmxx.fun/docker-releases-amd64</docker.registry>
+        <docker.registry>repo.pi.mmxx.fun/docker-releases-amd64/scdm</docker.registry>
         <docker.image>${docker.registry}/${project.artifactId}:${project.version}</docker.image>
         <!-- 仓库认证凭据配置在 ~/.m2/settings.xml 的 <servers> 中，id 为 ${docker.registry} 的主机名部分 -->
         <!-- mvn deploy 仅构建并推送 Docker 镜像，不发布 jar 到 Maven 仓库 -->
