@@ -86,6 +86,10 @@
                             <name>${docker.image}</name>
                             <build>
                                 <from>${docker.baseImage}</from>
+                                <!-- 附加标签：除版本号标签外，额外推送 latest 标签 -->
+                                <tags>
+                                    <tag>latest</tag>
+                                </tags>
                                 <workdir>/app</workdir>
                                 <assembly>
                                     <targetDir>/app</targetDir>
