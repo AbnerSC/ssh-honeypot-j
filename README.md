@@ -1,6 +1,6 @@
 # SSH/Telnet 蜜罐 (Java 25)
 
-一款中交互蜜罐，用于捕获针对服务器的 SSH/Telnet 暴力破解与入侵行为。
+一款交互式蜜罐，用于捕获针对服务器的 SSH/Telnet 暴力破解与入侵行为。
 基于 **Apache MINA SSHD** 实现 SSH 协议，原生 Socket 实现 Telnet 协议，
 内置伪装的 Ubuntu 22.04 虚拟文件系统与伪 Shell。
 
@@ -68,6 +68,47 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
 ```
 
 注意先把真实 sshd 移到别的端口，避免把自己锁在门外。
+
+## Docker 部署
+
+镜像基于 JDK 25 运行时构建，开箱即用。
+
+### 使用官方镜像（推荐）
+
+创建 `docker-compose.yml`，将日志目录挂载到宿主机，并映射 SSH(2222) 与 Telnet(2323) 端口：
+
+```yaml
+services:
+  ssh-honeypot-j:
+    image: scdm/ssh-honeypot-j:latest
+    container_name: ssh-honeypot-j
+    restart: always
+    volumes:
+      - ${PWD}/logs:/app/logs
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - 2222:2222
+      - 2323:2323
+    mem_limit: 256m
+```
+
+启动：
+
+```bash
+mkdir logs
+docker compose up -d
+```
+
+- `${PWD}/logs` 为宿主机日志目录，攻击日志实时写入 `./logs/honeypot.jsonl`
+- `mem_limit: 256m` 限制容器内存，避免海量会话拖垮宿主机
+- 如需自定义配置，可将 `config.yaml` 一并挂载：
+
+  ```yaml
+  volumes:
+    - ${PWD}/logs:/app/logs
+    - ${PWD}/config.yaml:/app/config.yaml
+  ```
 
 ## 测试
 
