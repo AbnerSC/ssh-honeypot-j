@@ -1,10 +1,10 @@
-package com.honeypot;
+package org.open.scdm.honeypot;
 
-import com.honeypot.config.HoneypotConfig;
-import com.honeypot.fs.VirtualFileSystem;
-import com.honeypot.log.AttackLogger;
-import com.honeypot.ssh.SshHoneypotServer;
-import com.honeypot.telnet.TelnetHoneypotServer;
+import org.open.scdm.honeypot.config.HoneypotConfig;
+import org.open.scdm.honeypot.fs.VirtualFileSystem;
+import org.open.scdm.honeypot.log.AttackLogger;
+import org.open.scdm.honeypot.ssh.SshHoneypotServer;
+import org.open.scdm.honeypot.telnet.TelnetHoneypotServer;
 
 import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;

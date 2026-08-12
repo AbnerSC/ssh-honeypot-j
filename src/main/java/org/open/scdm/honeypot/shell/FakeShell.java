@@ -1,6 +1,6 @@
-package com.honeypot.shell;
+package org.open.scdm.honeypot.shell;
 
-import com.honeypot.log.AttackLogger;
+import org.open.scdm.honeypot.log.AttackLogger;
 
 import java.io.IOException;
 import java.io.InputStream;

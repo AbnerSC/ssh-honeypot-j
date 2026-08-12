@@ -1,6 +1,6 @@
-package com.honeypot.shell;
+package org.open.scdm.honeypot.shell;
 
-import com.honeypot.fs.VirtualFileSystem;
+import org.open.scdm.honeypot.fs.VirtualFileSystem;
 
 import java.util.ArrayList;
 import java.util.List;

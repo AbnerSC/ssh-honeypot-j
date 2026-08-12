@@ -1,10 +1,10 @@
-package com.honeypot.telnet;
+package org.open.scdm.honeypot.telnet;
 
-import com.honeypot.fs.VirtualFileSystem;
-import com.honeypot.log.AttackLogger;
-import com.honeypot.shell.CommandProcessor;
-import com.honeypot.shell.FakeShell;
-import com.honeypot.shell.SessionState;
+import org.open.scdm.honeypot.fs.VirtualFileSystem;
+import org.open.scdm.honeypot.log.AttackLogger;
+import org.open.scdm.honeypot.shell.CommandProcessor;
+import org.open.scdm.honeypot.shell.FakeShell;
+import org.open.scdm.honeypot.shell.SessionState;
 
 import java.io.IOException;
 import java.io.InputStream;

@@ -1,7 +1,6 @@
-package com.honeypot.fs;
+package org.open.scdm.honeypot.fs;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 

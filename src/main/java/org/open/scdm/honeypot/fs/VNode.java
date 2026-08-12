@@ -1,4 +1,4 @@
-package com.honeypot.fs;
+package org.open.scdm.honeypot.fs;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;

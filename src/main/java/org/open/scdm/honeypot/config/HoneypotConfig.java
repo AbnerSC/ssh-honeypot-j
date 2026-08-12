@@ -1,4 +1,4 @@
-package com.honeypot.config;
+package org.open.scdm.honeypot.config;
 
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;

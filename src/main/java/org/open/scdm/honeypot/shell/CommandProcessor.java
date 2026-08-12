@@ -1,7 +1,7 @@
-package com.honeypot.shell;
+package org.open.scdm.honeypot.shell;
 
-import com.honeypot.fs.VNode;
-import com.honeypot.log.AttackLogger;
+import org.open.scdm.honeypot.fs.VNode;
+import org.open.scdm.honeypot.log.AttackLogger;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;

@@ -1,4 +1,4 @@
-package com.honeypot.log;
+package org.open.scdm.honeypot.log;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
