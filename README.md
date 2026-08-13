@@ -155,3 +155,8 @@ src/main/java/com/honeypot/
 - [ ] PostgreSQL
 - [ ] Http(Nginx)
 - [ ] Redis
+
+## 待办清单
+- [ ] 增加常用账号密码，增加错误账号拦截，让蜜罐表现更真实
+- [ ] 增加shell命令随机延时，避免直接回应，让蜜罐表现更真实
+- [ ] 增加支持LLM，让大模型自动回应shell命令，让蜜罐表现更真实
