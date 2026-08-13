@@ -80,6 +80,9 @@ public class CommandProcessor {
             return runSingle(st, String.join(" ", args));
         }
 
+        // 模拟命令执行耗时，让响应节奏接近真实主机，降低被攻击者识破的概率
+        simulateLatency(name, args);
+
         String output = switch (name) {
             case "exit", "logout", "quit" -> EXIT_SIGNAL;
             case "help" -> help();
@@ -258,6 +261,91 @@ public class CommandProcessor {
             return "";
         }
         return output;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 执行延迟模拟                                                        */
+    /* ------------------------------------------------------------------ */
+
+    /** sleep 命令延迟上限（秒），防止超长 sleep 永久占用会话线程 */
+    private static final long MAX_SLEEP_SECONDS = 120;
+
+    /** 按命令类型模拟真实执行耗时 */
+    private void simulateLatency(String name, List<String> args) {
+        long ms = latencyMillis(name, args);
+        if (ms <= 0) return;
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** [min, max] 区间内的随机毫秒数 */
+    private long between(long min, long max) {
+        return min + (max <= min ? 0 : RANDOM.nextLong(max - min + 1));
+    }
+
+    /** 按命令类型给出模拟耗时（毫秒），区间随机以避免节奏过于机械 */
+    private long latencyMillis(String name, List<String> args) {
+        // 基线抖动：shell 解析 + 终端 IO 的自然延迟
+        long jitter = between(15, 80);
+        long base = switch (name) {
+            // 网络连接超时类：真实 TCP 超时需要等待数秒
+            case "ssh", "scp", "sftp", "ftp", "telnet" -> between(8_000, 15_000);
+            // 反弹 shell / 外连挂起类：模拟长时间等待回连
+            case "nc", "ncat", "netcat", "socat" -> between(20_000, 40_000);
+            // 网络探测类
+            case "ping", "ping6" -> between(3_500, 5_500);   // 默认 4 包、每包间隔 1 秒
+            case "traceroute", "tracepath", "mtr" -> between(2_500, 6_000);
+            case "dig", "nslookup", "host" -> between(150, 600);
+            // 下载 / 传输类
+            case "wget", "curl" -> between(1_500, 4_500);
+            case "rsync" -> between(2_000, 6_000);
+            // 包管理 / 编译安装类
+            case "apt", "apt-get", "aptitude", "yum", "dnf" -> between(2_000, 6_000);
+            case "dpkg", "rpm", "snap", "flatpak" -> between(800, 2_500);
+            case "gcc", "cc", "g++", "make", "cmake" -> between(1_500, 5_000);
+            case "pip", "pip3", "npm", "yarn", "cargo", "go" -> between(1_500, 5_000);
+            // 磁盘重操作类
+            case "tar", "unzip", "zip", "gzip", "gunzip", "bzip2", "xz" -> between(600, 2_500);
+            case "dd" -> between(1_200, 4_000);
+            case "mkfs", "mkswap", "fsck" -> between(1_500, 4_500);
+            case "sync" -> between(500, 2_000);
+            // 系统管理 / 认证类
+            case "systemctl", "service" -> between(350, 1_200);
+            case "su", "sudo", "passwd", "chpasswd", "visudo", "pkexec" -> between(400, 1_000);
+            case "reboot", "shutdown", "halt", "poweroff" -> between(2_500, 5_000);
+            case "journalctl", "dmesg", "lsof", "lspci", "lsusb", "lsmod" -> between(200, 800);
+            case "useradd", "adduser", "usermod", "deluser", "userdel" -> between(200, 600);
+            // 解释器一行式脚本执行
+            case "python", "python3", "perl", "php", "ruby", "lua", "node", "java" -> between(250, 1_000);
+            // 扫描 / 遍历类
+            case "find", "grep", "egrep", "fgrep", "zgrep", "locate" -> between(120, 700);
+            case "du", "df", "free", "ps", "top", "htop", "vmstat", "iostat" -> between(60, 350);
+            // sleep：按参数真实等待
+            case "sleep" -> sleepArgMillis(args);
+            // 即时返回的内建命令几乎无延迟
+            case "exit", "logout", "quit", "true", "false", "cd", "pwd", "echo",
+                 "whoami", "id", "history", "help", "clear", "tty" -> 0;
+            // 其余按普通快速命令处理
+            default -> between(20, 250);
+        };
+        return jitter + base;
+    }
+
+    /** 解析 sleep 参数并返回应等待的毫秒数（上限 MAX_SLEEP_SECONDS 秒） */
+    private long sleepArgMillis(List<String> args) {
+        for (String a : args) {
+            if (a.startsWith("-")) continue;
+            try {
+                double sec = Double.parseDouble(a.replaceAll("[smhd]$", ""));
+                double mul = a.endsWith("m") ? 60 : a.endsWith("h") ? 3600 : a.endsWith("d") ? 86400 : 1;
+                return Math.min((long) (sec * mul * 1000), MAX_SLEEP_SECONDS * 1000);
+            } catch (NumberFormatException ignore) {}
+            break;
+        }
+        return between(500, 1_500);
     }
 
     /* ------------------------------------------------------------------ */
