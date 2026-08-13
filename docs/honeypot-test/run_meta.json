@@ -1,0 +1,11 @@
+{
+  "target": "172.17.1.203",
+  "ssh_port": 2222,
+  "telnet_port": 2323,
+  "num_attackers": 24,
+  "duration_s": 660,
+  "start_wall": "2026-08-12 17:47:42",
+  "end_wall": "2026-08-12 18:00:02",
+  "total_attempts": 360,
+  "real_source_ip": "test-host-single-ip"
+}

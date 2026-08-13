@@ -1,0 +1,405 @@
+{
+  "total": 360,
+  "by_proto": {
+    "telnet": 182,
+    "ssh": 178
+  },
+  "accepted": 360,
+  "accepted_rate": 100.0,
+  "opened": 360,
+  "errors": {},
+  "per_attacker": {
+    "attacker_01": {
+      "telnet": 8,
+      "total": 18,
+      "ssh": 10
+    },
+    "attacker_02": {
+      "ssh": 5,
+      "total": 14,
+      "telnet": 9
+    },
+    "attacker_03": {
+      "ssh": 7,
+      "total": 16,
+      "telnet": 9
+    },
+    "attacker_04": {
+      "ssh": 6,
+      "total": 11,
+      "telnet": 5
+    },
+    "attacker_05": {
+      "ssh": 7,
+      "total": 16,
+      "telnet": 9
+    },
+    "attacker_06": {
+      "telnet": 9,
+      "total": 18,
+      "ssh": 9
+    },
+    "attacker_07": {
+      "telnet": 9,
+      "total": 13,
+      "ssh": 4
+    },
+    "attacker_08": {
+      "ssh": 9,
+      "total": 17,
+      "telnet": 8
+    },
+    "attacker_09": {
+      "telnet": 6,
+      "total": 12,
+      "ssh": 6
+    },
+    "attacker_10": {
+      "ssh": 9,
+      "total": 18,
+      "telnet": 9
+    },
+    "attacker_11": {
+      "ssh": 8,
+      "total": 13,
+      "telnet": 5
+    },
+    "attacker_12": {
+      "ssh": 3,
+      "total": 12,
+      "telnet": 9
+    },
+    "attacker_13": {
+      "telnet": 10,
+      "total": 18,
+      "ssh": 8
+    },
+    "attacker_14": {
+      "telnet": 5,
+      "total": 12,
+      "ssh": 7
+    },
+    "attacker_15": {
+      "ssh": 8,
+      "total": 12,
+      "telnet": 4
+    },
+    "attacker_16": {
+      "telnet": 7,
+      "total": 15,
+      "ssh": 8
+    },
+    "attacker_17": {
+      "ssh": 6,
+      "total": 15,
+      "telnet": 9
+    },
+    "attacker_18": {
+      "telnet": 8,
+      "total": 13,
+      "ssh": 5
+    },
+    "attacker_19": {
+      "telnet": 10,
+      "total": 21,
+      "ssh": 11
+    },
+    "attacker_20": {
+      "telnet": 6,
+      "total": 13,
+      "ssh": 7
+    },
+    "attacker_21": {
+      "ssh": 13,
+      "total": 21,
+      "telnet": 8
+    },
+    "attacker_22": {
+      "ssh": 9,
+      "total": 15,
+      "telnet": 6
+    },
+    "attacker_23": {
+      "ssh": 9,
+      "total": 14,
+      "telnet": 5
+    },
+    "attacker_24": {
+      "telnet": 9,
+      "total": 13,
+      "ssh": 4
+    }
+  },
+  "distinct_users": 21,
+  "top_users": [
+    [
+      "root",
+      67
+    ],
+    [
+      "admin",
+      65
+    ],
+    [
+      "user",
+      28
+    ],
+    [
+      "administrator",
+      25
+    ],
+    [
+      "guest",
+      19
+    ],
+    [
+      "ftp",
+      16
+    ],
+    [
+      "test",
+      14
+    ],
+    [
+      "backup",
+      12
+    ],
+    [
+      "oracle",
+      11
+    ],
+    [
+      "deploy",
+      10
+    ]
+  ],
+  "distinct_pwds": 29,
+  "top_pwds": [
+    [
+      "admin",
+      40
+    ],
+    [
+      "password",
+      36
+    ],
+    [
+      "123456",
+      28
+    ],
+    [
+      "changeme",
+      21
+    ],
+    [
+      "1234",
+      17
+    ],
+    [
+      "ftp",
+      16
+    ],
+    [
+      "backup",
+      12
+    ],
+    [
+      "toor",
+      12
+    ],
+    [
+      "oracle",
+      11
+    ],
+    [
+      "P@ssw0rd",
+      11
+    ]
+  ],
+  "total_cmds": 1583,
+  "distinct_client_banners": 14,
+  "client_banners": {
+    "telnet/ansi": 55,
+    "telnet/vt100": 36,
+    "telnet/linux": 38,
+    "telnet/xterm": 53,
+    "SSH-2.0-OpenSSH_8.9p1": 17,
+    "SSH-2.0-PuTTY_Release_0.78": 15,
+    "SSH-2.0-OpenSSH_9.3": 24,
+    "SSH-2.0-OpenSSH_8.2p1": 31,
+    "SSH-2.0-libssh2_1.9.0": 17,
+    "SSH-2.0-paramiko_2.7": 14,
+    "SSH-2.0-OpenSSH_7.4": 16,
+    "SSH-2.0-OpenSSH_6.6.1p1": 10,
+    "SSH-2.0-SSH_1.99-SshLib": 17,
+    "SSH-2.0-AsyncSSH_2.13": 17
+  },
+  "timeline": [
+    {
+      "minute": 0,
+      "attempts": 40
+    },
+    {
+      "minute": 1,
+      "attempts": 29
+    },
+    {
+      "minute": 2,
+      "attempts": 39
+    },
+    {
+      "minute": 3,
+      "attempts": 30
+    },
+    {
+      "minute": 4,
+      "attempts": 28
+    },
+    {
+      "minute": 5,
+      "attempts": 25
+    },
+    {
+      "minute": 6,
+      "attempts": 33
+    },
+    {
+      "minute": 7,
+      "attempts": 31
+    },
+    {
+      "minute": 8,
+      "attempts": 35
+    },
+    {
+      "minute": 9,
+      "attempts": 33
+    },
+    {
+      "minute": 10,
+      "attempts": 29
+    },
+    {
+      "minute": 11,
+      "attempts": 7
+    },
+    {
+      "minute": 12,
+      "attempts": 1
+    }
+  ],
+  "sample": [
+    {
+      "attacker": "attacker_07",
+      "src_ip_label": "209.141.215.173",
+      "proto": "telnet",
+      "user": "admin",
+      "pw": "password",
+      "client_banner": "telnet/ansi",
+      "accepted": true,
+      "opened": true,
+      "err": null,
+      "n_cmds": 3,
+      "ts": 1.54,
+      "wall": "17:47:44"
+    },
+    {
+      "attacker": "attacker_18",
+      "src_ip_label": "194.165.87.84",
+      "proto": "telnet",
+      "user": "admin",
+      "pw": "changeme",
+      "client_banner": "telnet/vt100",
+      "accepted": true,
+      "opened": true,
+      "err": null,
+      "n_cmds": 3,
+      "ts": 1.54,
+      "wall": "17:47:44"
+    },
+    {
+      "attacker": "attacker_16",
+      "src_ip_label": "91.219.113.190",
+      "proto": "telnet",
+      "user": "admin",
+      "pw": "password",
+      "client_banner": "telnet/ansi",
+      "accepted": true,
+      "opened": true,
+      "err": null,
+      "n_cmds": 3,
+      "ts": 1.54,
+      "wall": "17:47:44"
+    },
+    {
+      "attacker": "attacker_19",
+      "src_ip_label": "209.141.147.162",
+      "proto": "telnet",
+      "user": "oracle",
+      "pw": "oracle",
+      "client_banner": "telnet/ansi",
+      "accepted": true,
+      "opened": true,
+      "err": null,
+      "n_cmds": 3,
+      "ts": 1.54,
+      "wall": "17:47:44"
+    },
+    {
+      "attacker": "attacker_01",
+      "src_ip_label": "103.97.51.142",
+      "proto": "telnet",
+      "user": "deploy",
+      "pw": "deploy",
+      "client_banner": "telnet/linux",
+      "accepted": true,
+      "opened": true,
+      "err": null,
+      "n_cmds": 4,
+      "ts": 1.84,
+      "wall": "17:47:44"
+    },
+    {
+      "attacker": "attacker_20",
+      "src_ip_label": "5.188.44.16",
+      "proto": "telnet",
+      "user": "service",
+      "pw": "service",
+      "client_banner": "telnet/xterm",
+      "accepted": true,
+      "opened": true,
+      "err": null,
+      "n_cmds": 4,
+      "ts": 1.84,
+      "wall": "17:47:44"
+    },
+    {
+      "attacker": "attacker_06",
+      "src_ip_label": "194.165.246.234",
+      "proto": "telnet",
+      "user": "backup",
+      "pw": "backup",
+      "client_banner": "telnet/linux",
+      "accepted": true,
+      "opened": true,
+      "err": null,
+      "n_cmds": 5,
+      "ts": 2.14,
+      "wall": "17:47:44"
+    },
+    {
+      "attacker": "attacker_14",
+      "src_ip_label": "193.106.142.196",
+      "proto": "telnet",
+      "user": "user",
+      "pw": "letmein",
+      "client_banner": "telnet/vt100",
+      "accepted": true,
+      "opened": true,
+      "err": null,
+      "n_cmds": 6,
+      "ts": 2.44,
+      "wall": "17:47:45"
+    }
+  ]
+}
