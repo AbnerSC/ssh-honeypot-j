@@ -133,19 +133,21 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 ## 项目结构
 
 ```
+docs                                     # 系统文档
 src/main/java/com/honeypot/
-├── Main.java                      # 入口：加载配置、启动服务、优雅关闭
-├── config/HoneypotConfig.java     # YAML 配置加载（默认 config.yaml）
+├── Main.java                         # 入口：加载配置、启动服务、优雅关闭
+├── config/HoneypotConfig.java        # YAML 配置加载（默认 config.yaml）
 ├── fs/
-│   ├── VNode.java                 # 虚拟文件节点
-│   └── VirtualFileSystem.java     # 内存文件系统（伪装 Ubuntu）
+│   ├── VNode.java                   # 虚拟文件节点
+│   └── VirtualFileSystem.java       # 内存文件系统（伪装 Ubuntu）
 ├── shell/
-│   ├── FakeShell.java             # 交互式行编辑 + REPL（SSH/Telnet 共用）
-│   ├── CommandProcessor.java      # 命令解释器（40+ 命令）
-│   └── SessionState.java          # 会话状态（用户/目录/历史）
-├── ssh/SshHoneypotServer.java     # SSH 服务（MINA SSHD）
-├── telnet/TelnetHoneypotServer.java # Telnet 服务（原生 Socket）
-└── log/AttackLogger.java          # JSONL 攻击日志
+│   ├── FakeShell.java               # 交互式行编辑 + REPL（SSH/Telnet 共用）
+│   ├── CommandProcessor.java        # 命令解释器（40+ 命令）
+│   └── SessionState.java            # 会话状态（用户/目录/历史）
+├── ssh/SshHoneypotServer.java        # SSH 服务（MINA SSHD）
+├── telnet/TelnetHoneypotServer.java  # Telnet 服务（原生 Socket）
+└── log/AttackLogger.java             # JSONL 攻击日志
+config.yaml                              # 系统配置信息
 ```
 
 ## 支持诱捕清单
@@ -155,3 +157,8 @@ src/main/java/com/honeypot/
 - [ ] PostgreSQL
 - [ ] Http(Nginx)
 - [ ] Redis
+
+## 待办清单
+- [ ] 增加常用账号密码，增加错误账号拦截，让蜜罐表现更真实
+- [ ] 增加shell命令随机延时，避免直接回应，让蜜罐表现更真实
+- [ ] 增加支持LLM，让大模型自动回应shell命令，让蜜罐表现更真实
