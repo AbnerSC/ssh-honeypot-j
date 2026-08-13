@@ -1,0 +1,81 @@
+package org.open.scdm.honeypot.auth;
+
+import org.open.scdm.honeypot.log.AttackLogger;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
+
+/**
+ * 凭证守卫：基于内存密码本校验登录凭证，并对连续失败的源 IP 实施临时锁定。
+ * <p>
+ * 规则：
+ *  - 只有密码本中的 用户名/密码 组合才允许登录成功，不再全部放行
+ *  - 同一源 IP 连续登录失败达到阈值（默认 3 次）后锁定，锁定期内直接拒绝
+ *  - 登录成功会清零该 IP 的失败计数
+ *  - 失败计数与锁定状态全部缓存在内存中，进程重启后清空
+ */
+public class CredentialGuard {
+    private static final Logger LOG = Logger.getLogger(CredentialGuard.class.getName());
+
+    private final Map<String, String> credentials;   // 密码本：用户名 -> 密码
+    private final int maxFailures;                   // 连续失败达到该次数即锁定
+    private final long lockMillis;                   // 锁定时长（毫秒）
+    private final AttackLogger logger;
+
+    /** IP -> 连续失败次数（内存缓存） */
+    private final Map<String, Integer> failCounts = new ConcurrentHashMap<>();
+    /** IP -> 锁定截止时间戳（毫秒，内存缓存） */
+    private final Map<String, Long> lockedUntil = new ConcurrentHashMap<>();
+
+    public CredentialGuard(Map<String, String> credentials, int maxFailures,
+                           int lockMinutes, AttackLogger logger) {
+        this.credentials = Map.copyOf(credentials);
+        this.maxFailures = Math.max(1, maxFailures);
+        this.lockMillis = Math.max(1, lockMinutes) * 60_000L;
+        this.logger = logger;
+        LOG.info("密码本已加载，共 " + credentials.size() + " 组凭证；连续失败 " +
+                this.maxFailures + " 次锁定 " + lockMinutes + " 分钟");
+    }
+
+    /** 该 IP 是否处于锁定状态（锁定过期自动解除） */
+    public boolean isLocked(String ip) {
+        Long until = lockedUntil.get(ip);
+        if (until == null) return false;
+        if (System.currentTimeMillis() >= until) {
+            lockedUntil.remove(ip, until);
+            failCounts.remove(ip);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 校验登录凭证并维护失败计数。
+     * 已锁定的 IP 直接拒绝；连续失败达到阈值后立即锁定并记录 ip_locked 事件。
+     */
+    public synchronized boolean authenticate(String ip, String username, String password) {
+        if (isLocked(ip)) return false;
+        String expected = username == null ? null : credentials.get(username);
+        boolean ok = expected != null && expected.equals(password == null ? "" : password);
+        if (ok) {
+            failCounts.remove(ip);
+        } else {
+            int n = failCounts.merge(ip, 1, Integer::sum);
+            if (n >= maxFailures) {
+                long until = System.currentTimeMillis() + lockMillis;
+                lockedUntil.put(ip, until);
+                failCounts.remove(ip);
+                LOG.warning("源 IP " + ip + " 连续登录失败 " + n + " 次，锁定 " +
+                        (lockMillis / 60_000) + " 分钟");
+                if (logger != null) logger.ipLocked(ip, until);
+            }
+        }
+        return ok;
+    }
+
+    /** 连续失败阈值（Telnet 侧用作单连接允许的最大尝试次数） */
+    public int getMaxFailures() {
+        return maxFailures;
+    }
+}

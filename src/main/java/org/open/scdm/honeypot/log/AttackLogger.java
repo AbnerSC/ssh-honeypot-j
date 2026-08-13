@@ -6,7 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -58,6 +60,14 @@ public class AttackLogger implements AutoCloseable {
         System.out.printf("[%s] [%s] 登录尝试 %s 用户=%s 密码=%s -> %s%n",
                 LocalDateTime.now().format(TS), protocol, ip, username, password,
                 success ? "放行(蜜罐)" : "拒绝");
+    }
+
+    public void ipLocked(String ip, long untilMillis) {
+        String until = LocalDateTime.ofInstant(Instant.ofEpochMilli(untilMillis), ZoneId.systemDefault())
+                .format(TS);
+        write(Map.of("event", "ip_locked", "src_ip", ip, "until", until));
+        System.out.printf("[%s] 源 IP %s 连续登录失败已达上限，锁定至 %s%n",
+                LocalDateTime.now().format(TS), ip, until);
     }
 
     public void command(String sessionId, String ip, String username, String cmdline) {

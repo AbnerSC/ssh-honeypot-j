@@ -1,5 +1,6 @@
 package org.open.scdm.honeypot;
 
+import org.open.scdm.honeypot.auth.CredentialGuard;
 import org.open.scdm.honeypot.config.HoneypotConfig;
 import org.open.scdm.honeypot.fs.VirtualFileSystem;
 import org.open.scdm.honeypot.log.AttackLogger;
@@ -65,15 +66,20 @@ public class Main {
         VirtualFileSystem fs = new VirtualFileSystem();
         AttackLogger attackLogger = new AttackLogger(logFile);
 
+        // 凭证守卫：密码本校验 + 连续失败锁定源 IP（状态缓存在内存）
+        var authCfg = config.getAuth();
+        CredentialGuard guard = new CredentialGuard(
+                authCfg.getCredentials(), authCfg.getMaxFailures(), authCfg.getLockMinutes(), attackLogger);
+
         SshHoneypotServer sshServer = null;
         TelnetHoneypotServer telnetServer = null;
 
         if (sshEnabled) {
-            sshServer = new SshHoneypotServer(config.getSsh().getPort(), fs, attackLogger);
+            sshServer = new SshHoneypotServer(config.getSsh().getPort(), fs, attackLogger, guard);
             sshServer.start();
         }
         if (telnetEnabled) {
-            telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger);
+            telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger, guard);
             telnetServer.start();
         }
 

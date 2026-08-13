@@ -9,3 +9,14 @@ telnet:
 
 log:
   file: logs/honeypot.jsonl   # 攻击日志文件路径
+
+# 登录认证（密码本）配置：仅密码本内的 用户名/密码 允许登录
+auth:
+  maxFailures: 3      # 连续登录失败达到该次数后锁定源 IP
+  lockMinutes: 30     # 源 IP 锁定时长（分钟）
+  credentials:        # 密码本：常见用户名与弱口令
+    root: "123456"
+    admin: "admin123"
+    ubuntu: "ubuntu"
+    pi: "raspberry"
+    test: "test123"

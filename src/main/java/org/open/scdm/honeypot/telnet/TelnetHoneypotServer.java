@@ -1,5 +1,6 @@
 package org.open.scdm.honeypot.telnet;
 
+import org.open.scdm.honeypot.auth.CredentialGuard;
 import org.open.scdm.honeypot.fs.VirtualFileSystem;
 import org.open.scdm.honeypot.log.AttackLogger;
 import org.open.scdm.honeypot.shell.CommandProcessor;
@@ -18,7 +19,8 @@ import java.util.logging.Logger;
 
 /**
  * Telnet 蜜罐服务（原生 Socket 实现，含 IAC 协商）。
- * 模拟经典 Linux login 提示符，任意凭证均可"登录成功"。
+ * 模拟经典 Linux login 提示符，按密码本校验凭证；
+ * 单连接最多重试 maxFailures 次，连续失败达阈值后锁定源 IP。
  */
 public class TelnetHoneypotServer {
     private static final Logger LOG = Logger.getLogger(TelnetHoneypotServer.class.getName());
@@ -31,15 +33,17 @@ public class TelnetHoneypotServer {
     private final VirtualFileSystem fs;
     private final AttackLogger logger;
     private final CommandProcessor processor;
+    private final CredentialGuard guard;
     /** 虚拟线程执行器：每个连接一条虚拟线程，替代 cachedThreadPool 平台线程，大幅降低并发连接内存开销 */
     private final ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
     private volatile boolean running = true;
     private ServerSocket serverSocket;
 
-    public TelnetHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger) {
+    public TelnetHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard) {
         this.port = port;
         this.fs = fs;
         this.logger = logger;
+        this.guard = guard;
         this.processor = new CommandProcessor(logger);
     }
 
@@ -77,20 +81,41 @@ public class TelnetHoneypotServer {
 
             negotiate(out);
 
-            // 经典 login 流程
+            // 经典 login 流程：按密码本校验，每次尝试均记录日志
             out.write("\r\nUbuntu 22.04.3 LTS\r\n".getBytes());
             out.flush();
-            String username = promptLine(in, out, "svr01 login: ", true);
-            if (username == null || username.isBlank()) username = "root";
-            String password = promptLine(in, out, "Password: ", false);
-            if (password == null) password = "";
-
-            logger.authAttempt(sessionId, "telnet", ip, username.trim(), password.trim(), true);
+            String username = null;
+            boolean authed = false;
+            for (int attempt = 0; attempt < guard.getMaxFailures(); attempt++) {
+                if (guard.isLocked(ip)) {
+                    out.write("\r\nToo many failed attempts. Connection locked.\r\n".getBytes());
+                    out.flush();
+                    break;
+                }
+                String u = promptLine(in, out, "svr01 login: ", true);
+                if (u == null) break;                          // 客户端断开
+                String p = promptLine(in, out, "Password: ", false);
+                if (p == null) p = "";
+                username = u.trim();
+                boolean ok = guard.authenticate(ip, username, p.trim());
+                logger.authAttempt(sessionId, "telnet", ip, username, p.trim(), ok);
+                if (ok) {
+                    authed = true;
+                    break;
+                }
+                out.write("\r\nLogin incorrect\r\n".getBytes());
+                out.flush();
+            }
+            if (!authed) {
+                // 认证失败（凭证错误/被锁定/客户端断开）：记录会话关闭后断开
+                logger.sessionClose(sessionId, ip, System.currentTimeMillis() - start);
+                return;
+            }
             out.write("\r\n".getBytes());
             out.flush();
 
             // 进入伪 Shell
-            SessionState state = new SessionState(sessionId, ip, username.trim(), fs);
+            SessionState state = new SessionState(sessionId, ip, username, fs);
             FakeShell shell = new FakeShell(in, out, state, processor, logger, st -> {});
             shell.run();
 

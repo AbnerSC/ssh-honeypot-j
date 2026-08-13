@@ -1,5 +1,6 @@
 package org.open.scdm.honeypot.ssh;
 
+import org.open.scdm.honeypot.auth.CredentialGuard;
 import org.open.scdm.honeypot.fs.VirtualFileSystem;
 import org.open.scdm.honeypot.log.AttackLogger;
 import org.open.scdm.honeypot.shell.CommandProcessor;
@@ -28,7 +29,8 @@ import java.util.logging.Logger;
  * SSH 蜜罐服务（基于 Apache MINA SSHD）。
  * 特点：
  *  - 伪装成 OpenSSH_8.9p1 (Ubuntu)
- *  - 任意用户名/密码均可"登录成功"，凭证全部记录
+ *  - 按密码本校验登录凭证，不再全部放行；全部尝试均记录日志
+ *  - 同一源 IP 连续失败达到阈值后被临时锁定，禁止登录
  *  - 支持交互式 shell 与 exec 两种攻击方式
  */
 public class SshHoneypotServer {
@@ -38,15 +40,17 @@ public class SshHoneypotServer {
     private final VirtualFileSystem fs;
     private final AttackLogger logger;
     private final CommandProcessor processor;
+    private final CredentialGuard guard;
     private SshServer sshd;
 
     /** sessionId -> 登录用户名（auth 阶段写入，shell 阶段读取） */
     private final Map<String, String> sessionUsers = new ConcurrentHashMap<>();
 
-    public SshHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger) {
+    public SshHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard) {
         this.port = port;
         this.fs = fs;
         this.logger = logger;
+        this.guard = guard;
         this.processor = new CommandProcessor(logger);
     }
 
@@ -62,14 +66,17 @@ public class SshHoneypotServer {
         CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(sshd, 2);
         sshd.setKeyPairProvider(new SimpleGeneratorHostKeyProvider(Path.of("hostkey.ser")));
 
-        // 密码认证：全部放行并记录
+        // 密码认证：按密码本校验，所有尝试均记录日志；连续失败由 CredentialGuard 锁定源 IP
         sshd.setPasswordAuthenticator((username, password, session) -> {
             String ip = clientIp(session);
             String sid = logger.newSessionId();
-            sessionUsers.put(sessionKey(session), username);
-            logger.authAttempt(sid, "ssh", ip, username, password, true);
-            logger.sessionOpen(sid, "ssh", ip, clientPort(session));
-            return true;
+            boolean ok = guard.authenticate(ip, username, password);
+            logger.authAttempt(sid, "ssh", ip, username, password, ok);
+            if (ok) {
+                sessionUsers.put(sessionKey(session), username);
+                logger.sessionOpen(sid, "ssh", ip, clientPort(session));
+            }
+            return ok;
         });
 
         // 公钥认证：记录指纹，拒绝（攻击者极少有合法公钥，拒绝更像真实主机）

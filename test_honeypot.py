@@ -15,7 +15,7 @@ def test_ssh_exec():
     print("=== [1] SSH exec 模式 ===")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(HOST, SSH_PORT, username="root", password="toor123", timeout=10)
+    client.connect(HOST, SSH_PORT, username="root", password="123456", timeout=10)
     _, stdout, _ = client.exec_command("uname -a; whoami; cat /etc/passwd | head -3")
     out = stdout.read().decode("utf-8", errors="replace")
     print(out[:400])
@@ -30,7 +30,7 @@ def test_ssh_shell():
     print("=== [2] SSH 交互式 Shell ===")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(HOST, SSH_PORT, username="root", password="toor123", timeout=10)
+    client.connect(HOST, SSH_PORT, username="root", password="123456", timeout=10)
     chan = client.invoke_shell(term="xterm")
     time.sleep(1.5)
 
