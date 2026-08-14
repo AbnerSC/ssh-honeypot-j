@@ -361,8 +361,8 @@ public class CommandProcessor {
     }
 
     private String cd(SessionState st, List<String> args) {
-        String target = args.isEmpty() ? ("root".equals(st.username) ? "/root" : "/home/" + st.username) : args.getFirst();
-        if (target.equals("~")) target = "root".equals(st.username) ? "/root" : "/home/" + st.username;
+        String target = args.isEmpty() ? st.homeDir : args.getFirst();
+        if (target.equals("~")) target = st.homeDir;
         VNode node = st.fs.resolve(st.cwd, target);
         if (node == null) return "-bash: cd: " + args.getFirst() + ": No such file or directory";
         if (!node.directory) return "-bash: cd: " + args.getFirst() + ": Not a directory";
@@ -609,8 +609,7 @@ public class CommandProcessor {
     }
 
     private String env(SessionState st) {
-        return "SHELL=/bin/bash\nUSER=" + st.username + "\nHOME=" +
-               ("root".equals(st.username) ? "/root" : "/home/" + st.username) +
+        return "SHELL=/bin/bash\nUSER=" + st.username + "\nHOME=" + st.homeDir +
                "\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n" +
                "HOSTNAME=svr01\nTERM=xterm\nLANG=en_US.UTF-8\nPWD=" + st.cwd;
     }

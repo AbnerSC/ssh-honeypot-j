@@ -19,6 +19,26 @@ public class VirtualFileSystem {
         return root;
     }
 
+    /**
+     * 确保某用户的主目录存在：非 root 用户登录后自动在 /home 下创建其用户目录
+     * （如 ubuntu 登录后创建 /home/ubuntu），避免 cd 时找不到目录。目录已存在则直接返回。
+     *
+     * @return 用户主目录节点；root 或非法用户名返回 null
+     */
+    public VNode ensureHome(String username) {
+        if (username == null || username.isEmpty() || "root".equals(username)) {
+            return null;
+        }
+        VNode home = resolve("/", "/home");
+        if (home == null || !home.directory) return null;
+        VNode userHome = home.child(username);
+        if (userHome == null) {
+            userHome = VNode.dir(username, "rwxr-xr-x", username);
+            home.add(userHome);
+        }
+        return userHome;
+    }
+
     /* ------------------------------------------------------------------ */
     /* 路径解析                                                            */
     /* ------------------------------------------------------------------ */
