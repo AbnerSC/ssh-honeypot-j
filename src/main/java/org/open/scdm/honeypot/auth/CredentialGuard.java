@@ -2,6 +2,7 @@ package org.open.scdm.honeypot.auth;
 
 import org.open.scdm.honeypot.log.AttackLogger;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -11,6 +12,7 @@ import java.util.logging.Logger;
  * <p>
  * 规则：
  *  - 只有密码本中的 用户名/密码 组合才允许登录成功，不再全部放行
+ *  - 每个账号可配置多个密码，命中任意一个即视为登录成功
  *  - 同一源 IP 连续登录失败达到阈值（默认 3 次）后锁定，锁定期内直接拒绝
  *  - 登录成功会清零该 IP 的失败计数
  *  - 失败计数与锁定状态全部缓存在内存中，进程重启后清空
@@ -18,7 +20,7 @@ import java.util.logging.Logger;
 public class CredentialGuard {
     private static final Logger LOG = Logger.getLogger(CredentialGuard.class.getName());
 
-    private final Map<String, String> credentials;   // 密码本：用户名 -> 密码
+    private final Map<String, List<String>> credentials;   // 密码本：用户名 -> 密码列表
     private final int maxFailures;                   // 连续失败达到该次数即锁定
     private final long lockMillis;                   // 锁定时长（毫秒）
     private final AttackLogger logger;
@@ -28,13 +30,19 @@ public class CredentialGuard {
     /** IP -> 锁定截止时间戳（毫秒，内存缓存） */
     private final Map<String, Long> lockedUntil = new ConcurrentHashMap<>();
 
-    public CredentialGuard(Map<String, String> credentials, int maxFailures,
+    public CredentialGuard(Map<String, List<String>> credentials, int maxFailures,
                            int lockMinutes, AttackLogger logger) {
-        this.credentials = Map.copyOf(credentials);
+        Map<String, List<String>> normalized = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> e : credentials.entrySet()) {
+            List<String> ps = e.getValue() == null ? List.of() : e.getValue();
+            normalized.put(e.getKey(), List.copyOf(ps));
+        }
+        this.credentials = Map.copyOf(normalized);
         this.maxFailures = Math.max(1, maxFailures);
         this.lockMillis = Math.max(1, lockMinutes) * 60_000L;
         this.logger = logger;
-        LOG.info("密码本已加载，共 " + credentials.size() + " 组凭证；连续失败 " +
+        int pwdCount = credentials.values().stream().mapToInt(l -> l == null ? 0 : l.size()).sum();
+        LOG.info("密码本已加载，共 " + credentials.size() + " 个账号、" + pwdCount + " 条密码；连续失败 " +
                 this.maxFailures + " 次锁定 " + lockMinutes + " 分钟");
     }
 
@@ -56,8 +64,9 @@ public class CredentialGuard {
      */
     public synchronized boolean authenticate(String ip, String username, String password) {
         if (isLocked(ip)) return false;
-        String expected = username == null ? null : credentials.get(username);
-        boolean ok = expected != null && expected.equals(password == null ? "" : password);
+        List<String> expectedList = username == null ? null : credentials.get(username);
+        String pwd = password == null ? "" : password;
+        boolean ok = expectedList != null && expectedList.contains(pwd);
         if (ok) {
             failCounts.remove(ip);
         } else {

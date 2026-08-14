@@ -8,7 +8,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -29,6 +31,7 @@ import java.util.Map;
  *   lockMinutes: 30
  *   credentials:
  *     root: "123456"
+ *     root: ["123456", "toor", "password"]
  * </pre>
  */
 public class HoneypotConfig {
@@ -73,31 +76,59 @@ public class HoneypotConfig {
     /**
      * 登录认证配置：密码本（允许登录的 用户名/密码）+ 失败锁定策略。
      * 未配置 credentials 时使用内置常见弱口令，提升蜜罐被“成功登录”的真实感。
+     * <p>
+     * credentials 支持两种写法（向后兼容）：
+     *   - 单密码：   root: "123456"
+     *   - 多密码：   root: ["123456", "toor", "password"]
+     * 加载时统一转换为 用户名 -> 密码列表。
      */
     public static class Auth {
         private int maxFailures = 3;    // 连续登录失败达到该次数后锁定源 IP
         private int lockMinutes = 30;   // 源 IP 锁定时长（分钟）
-        private Map<String, String> credentials = defaultCredentials();
+        private Map<String, List<String>> credentials = defaultCredentials();
 
-        private static Map<String, String> defaultCredentials() {
-            Map<String, String> map = new LinkedHashMap<>();
-            map.put("root", "123456");
-            map.put("admin", "admin123");
-            map.put("ubuntu", "ubuntu");
-            map.put("pi", "raspberry");
-            map.put("test", "test123");
+        private static Map<String, List<String>> defaultCredentials() {
+            Map<String, List<String>> map = new LinkedHashMap<>();
+            map.put("root", List.of("123456"));
+            map.put("admin", List.of("admin123"));
+            map.put("ubuntu", List.of("ubuntu"));
+            map.put("pi", List.of("raspberry"));
+            map.put("test", List.of("test123"));
             return map;
         }
 
         public int getMaxFailures() { return maxFailures; }
         public int getLockMinutes() { return lockMinutes; }
-        public Map<String, String> getCredentials() {
+        public Map<String, List<String>> getCredentials() {
             return (credentials == null || credentials.isEmpty()) ? defaultCredentials() : credentials;
         }
 
         public void setMaxFailures(int maxFailures) { this.maxFailures = maxFailures; }
         public void setLockMinutes(int lockMinutes) { this.lockMinutes = lockMinutes; }
-        public void setCredentials(Map<String, String> credentials) { this.credentials = credentials; }
+
+        /**
+         * YAML 反序列化入口。兼容两种写法：
+         *   - 值为字符串       -> 该账号单个密码
+         *   - 值为字符串列表    -> 该账号多个密码
+         */
+        @SuppressWarnings("unchecked")
+        public void setCredentials(Map<String, Object> raw) {
+            Map<String, List<String>> parsed = new LinkedHashMap<>();
+            if (raw == null) { credentials = parsed; return; }
+            for (Map.Entry<String, Object> e : raw.entrySet()) {
+                Object v = e.getValue();
+                List<String> list;
+                if (v instanceof List<?> l) {
+                    list = new ArrayList<>();
+                    for (Object item : l) list.add(String.valueOf(item));
+                } else {
+                    list = new ArrayList<>();
+                    list.add(String.valueOf(v));
+                }
+                parsed.put(e.getKey(), list);
+            }
+            credentials = parsed;
+        }
     }
 
     /**

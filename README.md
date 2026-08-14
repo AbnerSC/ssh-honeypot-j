@@ -60,6 +60,22 @@ log:
 
 配置文件不存在时使用内置默认值（SSH:2222、Telnet:2323、日志 logs/honeypot.jsonl）。
 
+### 账号配置多密码
+
+`auth.credentials` 支持两种写法，命中其中任意一个密码即视为登录成功：
+
+```yaml
+auth:
+  maxFailures: 3
+  lockMinutes: 30
+  credentials:
+    root: ["123456", "toor", "password", "root123"]     # 一个账号多个密码
+    admin: ["admin123", "admin"]                        # 列表形式多密码
+    ubuntu: "ubuntu"                                    # 兼容单字符串写法
+```
+
+> 也支持在配置文件中不写 `credentials`，此时使用内置默认弱口令本。
+
 ### 映射到真实 22/23 端口（Linux）
 
 ```bash

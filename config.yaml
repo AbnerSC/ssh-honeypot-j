@@ -11,12 +11,46 @@ log:
   file: logs/honeypot.jsonl   # 攻击日志文件路径
 
 # 登录认证（密码本）配置：仅密码本内的 用户名/密码 允许登录
+# 每个账号可配置多个密码（列表形式），命中任意一个即视为登录成功；
+# 也兼容单个字符串写法，例如：admin: "admin123"
 auth:
   maxFailures: 3      # 连续登录失败达到该次数后锁定源 IP
   lockMinutes: 30     # 源 IP 锁定时长（分钟）
-  credentials:        # 密码本：常见用户名与弱口令
-    root: "123456"
-    admin: "admin123"
-    ubuntu: "ubuntu"
-    pi: "raspberry"
-    test: "test123"
+  credentials:        # 密码本：常见用户名与弱口令，按爆破攻击热度排序
+    # 高频核心管理员账号（全网SSH爆破Top优先级）
+    root: ["123456", "toor", "password", "root123", "root", "12345678", "qwerty", "1q2w3e4r", "1234567890", "admin"]
+    admin: ["admin123", "admin", "administrator", "123456", "password", "admin@123", "Admin@123"]
+    administrator: ["admin123", "123456", "password", "administrator", "Admin@123"]
+    # 主流Linux发行版默认账号
+    ubuntu: ["ubuntu", "123456", "password"]
+    debian: ["debian", "123456", "password"]
+    centos: ["centos", "123456", "password"]
+    fedora: ["fedora", "123456"]
+    pi: ["raspberry", "123456", "pi"]
+    raspberrypi: ["raspberry", "123456"]
+    # 通用测试/访客/普通用户账号
+    test: ["test123", "test", "123456", "password"]
+    user: ["user", "123456", "password", "user123"]
+    guest: ["guest", "123456", "guest123"]
+    default: ["default", "123456"]
+    demo: ["demo", "123456", "demo123"]
+    # 常见数据库与系统服务账号
+    oracle: ["oracle", "123456", "password", "oracle123"]
+    mysql: ["mysql", "123456", "password"]
+    postgres: ["postgres", "123456", "password"]
+    mongodb: ["mongodb", "123456", "password"]
+    redis: ["redis", "123456", "password"]
+    ftp: ["ftp", "123456", "password"]
+    www-data: ["www-data", "123456"]
+    nobody: ["nobody", "123456"]
+    sshd: ["sshd", "123456"]
+    # 运维与开发常用业务账号
+    ops: ["ops123", "123456", "password"]
+    dev: ["dev123", "123456", "password"]
+    deploy: ["deploy", "123456", "deploy123"]
+    git: ["git", "123456", "password"]
+    docker: ["docker", "123456", "password"]
+    support: ["support", "123456", "password"]
+    service: ["service", "123456", "password"]
+    backup: ["backup", "123456", "password"]
+    sync: ["sync", "123456"]
