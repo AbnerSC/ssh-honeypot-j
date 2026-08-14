@@ -364,8 +364,12 @@ public class CommandProcessor {
         String target = args.isEmpty() ? st.homeDir : args.getFirst();
         if (target.equals("~")) target = st.homeDir;
         VNode node = st.fs.resolve(st.cwd, target);
-        if (node == null) return "-bash: cd: " + args.getFirst() + ": No such file or directory";
-        if (!node.directory) return "-bash: cd: " + args.getFirst() + ": Not a directory";
+        if (node == null) return "-bash: cd: " + target + ": No such file or directory";
+        if (!node.directory) return "-bash: cd: " + target + ": Not a directory";
+        // 进入目录需要该目录的执行（x）权限，按 Unix 权限模型校验当前登录用户
+        if (!node.canAccess(st.username, 'x')) {
+            return "-bash: cd: " + target + ": Permission denied";
+        }
         st.cwd = st.fs.normalize(st.cwd, target);
         return "";
     }

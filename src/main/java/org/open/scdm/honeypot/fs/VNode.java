@@ -79,6 +79,20 @@ public class VNode {
         return s;
     }
 
+    /**
+     * 判断某用户对该节点是否拥有指定权限位。
+     * perm 取 'r' / 'w' / 'x'（对应 Unix 的读/写/执行权限）。
+     * 规则与 Linux 一致：root 用户绕过权限检查；否则按 owner / group / other 三类判断。
+     */
+    public boolean canAccess(String user, char perm) {
+        if ("root".equals(user)) return true;           // root 无视权限位
+        int idx;
+        if (user.equals(owner)) idx = 0;                // 属主
+        else if (user.equals(group)) idx = 3;           // 属组
+        else idx = 6;                                   // 其他用户
+        return perms.charAt(idx + (perm == 'r' ? 0 : perm == 'w' ? 1 : 2)) != '-';
+    }
+
     /** ls -l 单行展示 */
     public String toLsLong() {
         String typeChar = directory ? "d" : "-";

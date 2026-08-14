@@ -33,7 +33,7 @@ public class VirtualFileSystem {
         if (home == null || !home.directory) return null;
         VNode userHome = home.child(username);
         if (userHome == null) {
-            userHome = VNode.dir(username, "rwxr-xr-x", username);
+            userHome = VNode.dir(username, "rwxr-x---", username);
             home.add(userHome);
         }
         return userHome;
