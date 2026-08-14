@@ -28,6 +28,7 @@ import java.util.Map;
  *   file: logs/honeypot.jsonl
  * auth:
  *   maxFailures: 3
+ *   windowMinutes: 5
  *   lockMinutes: 30
  *   credentials:
  *     root: "123456"
@@ -84,6 +85,7 @@ public class HoneypotConfig {
      */
     public static class Auth {
         private int maxFailures = 3;    // 连续登录失败达到该次数后锁定源 IP
+        private int windowMinutes = 5;  // 失败计数窗口（分钟）：窗口内的连续失败才累计
         private int lockMinutes = 30;   // 源 IP 锁定时长（分钟）
         private Map<String, List<String>> credentials = defaultCredentials();
 
@@ -98,12 +100,14 @@ public class HoneypotConfig {
         }
 
         public int getMaxFailures() { return maxFailures; }
+        public int getWindowMinutes() { return windowMinutes; }
         public int getLockMinutes() { return lockMinutes; }
         public Map<String, List<String>> getCredentials() {
             return (credentials == null || credentials.isEmpty()) ? defaultCredentials() : credentials;
         }
 
         public void setMaxFailures(int maxFailures) { this.maxFailures = maxFailures; }
+        public void setWindowMinutes(int windowMinutes) { this.windowMinutes = windowMinutes; }
         public void setLockMinutes(int lockMinutes) { this.lockMinutes = lockMinutes; }
 
         /**
@@ -111,7 +115,6 @@ public class HoneypotConfig {
          *   - 值为字符串       -> 该账号单个密码
          *   - 值为字符串列表    -> 该账号多个密码
          */
-        @SuppressWarnings("unchecked")
         public void setCredentials(Map<String, Object> raw) {
             Map<String, List<String>> parsed = new LinkedHashMap<>();
             if (raw == null) { credentials = parsed; return; }

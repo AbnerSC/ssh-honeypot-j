@@ -67,6 +67,7 @@ log:
 ```yaml
 auth:
   maxFailures: 3
+  windowMinutes: 5
   lockMinutes: 30
   credentials:
     root: ["123456", "toor", "password", "root123"]     # 一个账号多个密码
@@ -175,6 +176,6 @@ config.yaml                              # 系统配置信息
 - [ ] Redis
 
 ## 待办清单
-- [ ] 增加常用账号密码，增加错误账号拦截，让蜜罐表现更真实
+- [X] 增加常用账号密码，增加错误账号拦截，让蜜罐表现更真实
 - [X] 增加shell命令随机延时，避免直接回应，让蜜罐表现更真实
 - [ ] 增加支持LLM，让大模型自动回应shell命令，让蜜罐表现更真实

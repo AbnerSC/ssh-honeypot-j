@@ -15,7 +15,8 @@ log:
 # 也兼容单个字符串写法，例如：admin: "admin123"
 auth:
   maxFailures: 3      # 连续登录失败达到该次数后锁定源 IP
-  lockMinutes: 30     # 源 IP 锁定时长（分钟）
+  windowMinutes: 5    # 失败计数窗口：在该时长内的连续失败才累计，超出窗口则重置计数（分钟）
+  lockMinutes: 60     # 源 IP 锁定时长（分钟）
   credentials:        # 密码本：常见用户名与弱口令，按爆破攻击热度排序
     # 高频核心管理员账号（全网SSH爆破Top优先级）
     root: ["123456", "toor", "password", "root123", "root", "12345678", "qwerty", "1q2w3e4r", "1234567890", "admin"]

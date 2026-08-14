@@ -69,7 +69,8 @@ public class Main {
         // 凭证守卫：密码本校验 + 连续失败锁定源 IP（状态缓存在内存）
         var authCfg = config.getAuth();
         CredentialGuard guard = new CredentialGuard(
-                authCfg.getCredentials(), authCfg.getMaxFailures(), authCfg.getLockMinutes(), attackLogger);
+                authCfg.getCredentials(), authCfg.getMaxFailures(),
+                authCfg.getWindowMinutes(), authCfg.getLockMinutes(), attackLogger);
 
         SshHoneypotServer sshServer = null;
         TelnetHoneypotServer telnetServer = null;
