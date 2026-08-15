@@ -26,6 +26,7 @@ import java.util.Map;
  *   port: 2323
  * log:
  *   file: logs/honeypot.jsonl
+ *   db: logs/database.db
  * auth:
  *   maxFailures: 3
  *   windowMinutes: 5
@@ -68,10 +69,13 @@ public class HoneypotConfig {
 
     public static class Log {
         private String file = Path.of("logs", "honeypot.jsonl").toString();
+        private String db = Path.of("logs", "database.db").toString();
 
         public String getFile() { return file; }
+        public String getDb() { return db; }
 
         public void setFile(String file) { this.file = file; }
+        public void setDb(String db) { this.db = db; }
     }
 
     /**

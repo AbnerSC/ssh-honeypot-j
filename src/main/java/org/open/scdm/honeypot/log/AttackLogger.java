@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -20,9 +21,11 @@ import java.util.logging.Logger;
 /**
  * 攻击日志记录器：JSON Lines 格式，每条事件一行，便于后续用 jq/ELK 分析。
  * 同时输出到控制台便于实时观察。
+ * 同一份数据另外双写到 SQLite 数据库（SqliteLogStore），供后续 Web 可视化查询。
  * <p>
  * 性能设计：日志事件提交到单线程异步写入队列，调用方（会话线程）零阻塞，
- * 磁盘 I/O 不会拖慢攻击会话响应；单线程写入保证 JSONL 行序不乱。
+ * 磁盘 I/O 不会拖慢攻击会话响应；单线程写入保证 JSONL 行序不乱，
+ * 也保证了 SQLite 单连接写用的线程安全。
  *
  * 事件类型：session_open / auth_attempt / command / download / session_close
  */
@@ -31,15 +34,31 @@ public class AttackLogger implements AutoCloseable {
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
     private final BufferedWriter writer;
+    /** SQLite 持久化存储；初始化失败时为 null，退化为仅写 JSONL */
+    private final SqliteLogStore db;
     private final AtomicLong sessionSeq = new AtomicLong();
     /** 单线程写入器：串行刷盘，避免 synchronized 阻塞会话线程 */
     private final ExecutorService writePool =
             Executors.newSingleThreadExecutor(Thread.ofVirtual().name("attack-log-writer").factory());
 
-    public AttackLogger(Path logFile) throws IOException {
+    /** SQLite 写入动作：与对应 JSONL 记录共用同一时间戳，在单线程写入器中串行执行 */
+    @FunctionalInterface
+    private interface DbSink {
+        void write(SqliteLogStore store, LocalDateTime ts) throws SQLException;
+    }
+
+    public AttackLogger(Path logFile, Path dbFile) throws IOException {
         Files.createDirectories(logFile.getParent());
         this.writer = Files.newBufferedWriter(logFile, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        SqliteLogStore store = null;
+        try {
+            store = new SqliteLogStore(dbFile);
+            LOG.info("SQLite 数据库: " + dbFile.toAbsolutePath());
+        } catch (Exception e) {
+            LOG.warning("SQLite 数据库初始化失败，仅写入 JSONL 日志: " + e.getMessage());
+        }
+        this.db = store;
         LOG.info("攻击日志写入: " + logFile.toAbsolutePath());
     }
 
@@ -49,14 +68,16 @@ public class AttackLogger implements AutoCloseable {
 
     public void sessionOpen(String sessionId, String protocol, String ip, int port) {
         write(Map.of("event", "session_open", "session", sessionId,
-                "protocol", protocol, "src_ip", ip, "src_port", String.valueOf(port)));
+                "protocol", protocol, "src_ip", ip, "src_port", String.valueOf(port)),
+                (store, ts) -> store.recordSessionOpen(ts, sessionId, protocol, ip, port));
     }
 
     public void authAttempt(String sessionId, String protocol, String ip,
                             String username, String password, boolean success) {
         write(Map.of("event", "auth_attempt", "session", sessionId, "protocol", protocol,
                 "src_ip", ip, "username", username, "password", password,
-                "success", String.valueOf(success)));
+                "success", String.valueOf(success)),
+                (store, ts) -> store.recordAuthAttempt(ts, sessionId, protocol, ip, username, password, success));
         System.out.printf("[%s] [%s] 登录尝试 %s 用户=%s 密码=%s -> %s%n",
                 LocalDateTime.now().format(TS), protocol, ip, username, password,
                 success ? "放行(蜜罐)" : "拒绝");
@@ -65,32 +86,37 @@ public class AttackLogger implements AutoCloseable {
     public void ipLocked(String ip, long untilMillis) {
         String until = LocalDateTime.ofInstant(Instant.ofEpochMilli(untilMillis), ZoneId.systemDefault())
                 .format(TS);
-        write(Map.of("event", "ip_locked", "src_ip", ip, "until", until));
+        write(Map.of("event", "ip_locked", "src_ip", ip, "until", until),
+                (store, ts) -> store.recordIpLocked(ts, ip, untilMillis));
         System.out.printf("[%s] 源 IP %s 连续登录失败已达上限，锁定至 %s%n",
                 LocalDateTime.now().format(TS), ip, until);
     }
 
     public void command(String sessionId, String ip, String username, String cmdline) {
         write(Map.of("event", "command", "session", sessionId,
-                "src_ip", ip, "username", username, "command", cmdline));
+                "src_ip", ip, "username", username, "command", cmdline),
+                (store, ts) -> store.recordCommand(ts, sessionId, ip, username, cmdline));
         System.out.printf("[%s] [%s] %s$ %s%n", LocalDateTime.now().format(TS), ip, username, cmdline);
     }
 
     public void download(String sessionId, String ip, String username, String url) {
         write(Map.of("event", "download", "session", sessionId,
-                "src_ip", ip, "username", username, "url", url));
+                "src_ip", ip, "username", username, "url", url),
+                (store, ts) -> store.recordDownload(ts, sessionId, ip, username, url));
         System.out.printf("[%s] [%s] 恶意下载: %s%n", LocalDateTime.now().format(TS), ip, url);
     }
 
     public void sessionClose(String sessionId, String ip, long durationMs) {
         write(Map.of("event", "session_close", "session", sessionId,
-                "src_ip", ip, "duration_ms", String.valueOf(durationMs)));
+                "src_ip", ip, "duration_ms", String.valueOf(durationMs)),
+                (store, ts) -> store.recordSessionClose(ts, sessionId, durationMs));
     }
 
-    private void write(Map<String, String> fields) {
+    private void write(Map<String, String> fields, DbSink dbSink) {
         // 序列化在调用线程完成（纯内存操作），磁盘写入异步串行执行
+        LocalDateTime now = LocalDateTime.now();
         StringBuilder sb = new StringBuilder(128);
-        sb.append('{').append("\"ts\":\"").append(LocalDateTime.now().format(TS)).append('"');
+        sb.append('{').append("\"ts\":\"").append(now.format(TS)).append('"');
         fields.forEach((k, v) -> sb.append(",\"").append(k).append("\":\"").append(escape(v)).append('"'));
         sb.append('}');
         String line = sb.toString();
@@ -102,6 +128,13 @@ public class AttackLogger implements AutoCloseable {
                     writer.flush();
                 } catch (IOException e) {
                     LOG.warning("日志写入失败: " + e.getMessage());
+                }
+                if (db != null && dbSink != null) {
+                    try {
+                        dbSink.write(db, now);
+                    } catch (SQLException e) {
+                        LOG.warning("SQLite 写入失败: " + e.getMessage());
+                    }
                 }
             });
         } catch (Exception e) {
@@ -125,5 +158,12 @@ public class AttackLogger implements AutoCloseable {
             Thread.currentThread().interrupt();
         }
         writer.close();
+        if (db != null) {
+            try {
+                db.close();
+            } catch (SQLException e) {
+                LOG.warning("SQLite 关闭失败: " + e.getMessage());
+            }
+        }
     }
 }

@@ -9,6 +9,7 @@ telnet:
 
 log:
   file: logs/honeypot.jsonl   # 攻击日志文件路径
+  db: db/database.db        # SQLite 数据库文件（与 JSONL 双写同一份数据，供 Web 可视化）
 
 # 登录认证（密码本）配置：仅密码本内的 用户名/密码 允许登录
 # 每个账号可配置多个密码（列表形式），命中任意一个即视为登录成功；

@@ -46,6 +46,7 @@ public class Main {
         boolean sshEnabled = config.getSsh().isEnabled();
         boolean telnetEnabled = config.getTelnet().isEnabled();
         Path logFile = Path.of(config.getLog().getFile());
+        Path dbFile = Path.of(config.getLog().getDb());
 
         // 日志格式精简
         Logger root = Logger.getLogger("");
@@ -64,7 +65,7 @@ public class Main {
                 """);
 
         VirtualFileSystem fs = new VirtualFileSystem();
-        AttackLogger attackLogger = new AttackLogger(logFile);
+        AttackLogger attackLogger = new AttackLogger(logFile, dbFile);
 
         // 凭证守卫：密码本校验 + 连续失败锁定源 IP（状态缓存在内存）
         var authCfg = config.getAuth();
@@ -84,10 +85,10 @@ public class Main {
             telnetServer.start();
         }
 
-        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, 日志=%s%n",
+        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, 日志=%s, 数据库=%s%n",
                 sshEnabled ? String.valueOf(config.getSsh().getPort()) : "关闭",
                 telnetEnabled ? String.valueOf(config.getTelnet().getPort()) : "关闭",
-                logFile.toAbsolutePath());
+                logFile.toAbsolutePath(), dbFile.toAbsolutePath());
         System.out.println("按 Ctrl+C 停止。");
 
         // 优雅关闭

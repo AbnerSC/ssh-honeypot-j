@@ -45,6 +45,11 @@
             <artifactId>snakeyaml</artifactId>
             <version>2.6</version>
         </dependency>
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.50.3.0</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -63,9 +68,10 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>org.open.scdm.honeypot.Main</mainClass>
                                     <manifestEntries>
-                                        <!-- JDK 25 运行时优化：紧凑对象头(JEP 519)、禁用遗留 finalization(JEP 513) -->
+                                        <!-- JDK 25 运行时优化：紧凑对象头(JEP 519)、禁用遗留 finalization(JEP 513)；
+                                             sqlite-jdbc 需加载 native 库，显式授权避免后续 JDK 拦截 -->
                                         <Add-Opens>java.base/java.lang</Add-Opens>
-                                        <JVM-Options>-XX:+UseCompactObjectHeaders -XX:-EnableFinalization</JVM-Options>
+                                        <JVM-Options>--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:-EnableFinalization</JVM-Options>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
@@ -112,6 +118,7 @@
                                 <entryPoint>
                                     <exec>
                                         <arg>java</arg>
+                                        <arg>--enable-native-access=ALL-UNNAMED</arg>
                                         <arg>-XX:+UseCompactObjectHeaders</arg>
                                         <arg>-jar</arg>
                                         <arg>app.jar</arg>
