@@ -1,4 +1,4 @@
-# SSH/Telnet 蜜罐配置文件
+# SSH/Telnet/数据库蜜罐配置文件
 
 # 伪装主机名（Shell 提示符、uname/hostname/env、/etc/hostname 等处展示）
 # 优先级：Docker 容器主机名（docker run --hostname / compose hostname）> 此处配置 > 默认值 svr01
@@ -12,6 +12,19 @@ ssh:
 telnet:
   enabled: true      # 是否启用 Telnet 服务
   port: 2323         # Telnet 监听端口
+
+# 数据库蜜罐：连接时立即返回默认的认证失败信息并断开连接，不做任何协议交互
+mysql:
+  enabled: true      # 是否启用 MySQL 蜜罐（模拟 8.4，连接即返回 Access denied 1045/28000）
+  port: 3306         # MySQL 监听端口
+
+postgresql:
+  enabled: true      # 是否启用 PostgreSQL 蜜罐（模拟 17，连接即返回 FATAL 28P01 认证失败）
+  port: 5432         # PostgreSQL 监听端口
+
+redis:
+  enabled: true      # 是否启用 Redis 蜜罐（模拟 7，连接即返回 WRONGPASS）
+  port: 6379         # Redis 监听端口
 
 log:
   file: logs/honeypot.jsonl   # 攻击日志文件路径

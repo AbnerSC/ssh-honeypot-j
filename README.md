@@ -170,10 +170,10 @@ config.yaml                              # 系统配置信息
 ## 支持诱捕清单
 - [X] SSH
 - [X] Telnet
-- [ ] MySQL
-- [ ] PostgreSQL
+- [X] MySQL
+- [X] PostgreSQL
 - [ ] Http(Nginx)
-- [ ] Redis
+- [X] Redis
 
 ## 待办清单
 - [X] 增加常用账号密码，增加错误账号拦截，让蜜罐表现更真实

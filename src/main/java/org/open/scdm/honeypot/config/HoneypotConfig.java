@@ -26,6 +26,15 @@ import java.util.Map;
  * telnet:
  *   enabled: true
  *   port: 2323
+ * mysql:
+ *   enabled: true
+ *   port: 3306
+ * postgresql:
+ *   enabled: true
+ *   port: 5432
+ * redis:
+ *   enabled: true
+ *   port: 6379
  * log:
  *   file: logs/honeypot.jsonl
  *   db: logs/database.db
@@ -50,6 +59,9 @@ public class HoneypotConfig {
 
     private Ssh ssh = new Ssh();
     private Telnet telnet = new Telnet();
+    private Mysql mysql = new Mysql();
+    private Postgresql postgresql = new Postgresql();
+    private Redis redis = new Redis();
     private Log log = new Log();
     private Auth auth = new Auth();
 
@@ -67,6 +79,42 @@ public class HoneypotConfig {
     public static class Telnet {
         private boolean enabled = true;
         private int port = 2323;
+
+        public boolean isEnabled() { return enabled; }
+        public int getPort() { return port; }
+
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public void setPort(int port) { this.port = port; }
+    }
+
+    /** MySQL 蜜罐（模拟 MySQL 8.4，连接即返回 Access denied 并断开） */
+    public static class Mysql {
+        private boolean enabled = true;
+        private int port = 3306;
+
+        public boolean isEnabled() { return enabled; }
+        public int getPort() { return port; }
+
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public void setPort(int port) { this.port = port; }
+    }
+
+    /** PostgreSQL 蜜罐（模拟 PostgreSQL 17，连接即返回 password authentication failed 并断开） */
+    public static class Postgresql {
+        private boolean enabled = true;
+        private int port = 5432;
+
+        public boolean isEnabled() { return enabled; }
+        public int getPort() { return port; }
+
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public void setPort(int port) { this.port = port; }
+    }
+
+    /** Redis 蜜罐（模拟 Redis 7，连接即返回 WRONGPASS 并断开） */
+    public static class Redis {
+        private boolean enabled = true;
+        private int port = 6379;
 
         public boolean isEnabled() { return enabled; }
         public int getPort() { return port; }
@@ -217,12 +265,18 @@ public class HoneypotConfig {
     public String getHostname() { return hostname; }
     public Ssh getSsh() { return ssh; }
     public Telnet getTelnet() { return telnet; }
+    public Mysql getMysql() { return mysql; }
+    public Postgresql getPostgresql() { return postgresql; }
+    public Redis getRedis() { return redis; }
     public Log getLog() { return log; }
     public Auth getAuth() { return auth; }
 
     public void setHostname(String hostname) { this.hostname = hostname; }
     public void setSsh(Ssh ssh) { this.ssh = ssh; }
     public void setTelnet(Telnet telnet) { this.telnet = telnet; }
+    public void setMysql(Mysql mysql) { this.mysql = mysql; }
+    public void setPostgresql(Postgresql postgresql) { this.postgresql = postgresql; }
+    public void setRedis(Redis redis) { this.redis = redis; }
     public void setLog(Log log) { this.log = log; }
     public void setAuth(Auth auth) { this.auth = auth; }
 }

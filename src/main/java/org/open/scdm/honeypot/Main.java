@@ -4,6 +4,9 @@ import org.open.scdm.honeypot.auth.CredentialGuard;
 import org.open.scdm.honeypot.config.HoneypotConfig;
 import org.open.scdm.honeypot.fs.VirtualFileSystem;
 import org.open.scdm.honeypot.log.AttackLogger;
+import org.open.scdm.honeypot.mysql.MySqlHoneypotServer;
+import org.open.scdm.honeypot.postgres.PostgresHoneypotServer;
+import org.open.scdm.honeypot.redis.RedisHoneypotServer;
 import org.open.scdm.honeypot.ssh.SshHoneypotServer;
 import org.open.scdm.honeypot.telnet.TelnetHoneypotServer;
 
@@ -15,7 +18,7 @@ import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
 /**
- * SSH/Telnet 蜜罐主入口。
+ * SSH/Telnet/数据库蜜罐主入口。
  * <p>
  * 用法:
  *   java -jar ssh-honeypot.jar [选项]
@@ -24,9 +27,9 @@ import java.util.logging.SimpleFormatter;
  *   --config <file>       YAML 配置文件路径（默认 config.yaml）
  *   -h, --help            显示帮助
  * <p>
- * 配置文件格式见 config.yaml，支持 ssh/telnet 开关、端口与日志路径。
+ * 配置文件格式见 config.yaml，支持 ssh/telnet/mysql/postgresql/redis 开关、端口与日志路径。
  * <p>
- * 生产部署提示：Linux 下用 root 直接监听 22/23，或用 iptables 转发：
+ * 生产部署提示：Linux 下用 root 直接监听 22/23/3306/5432/6379，或用 iptables 转发：
  *   iptables -t nat -A PREROUTING -p tcp --dport 22 -j REDIRECT --to-port 2222
  *   iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
  */
@@ -61,7 +64,7 @@ public class Main {
 
         System.out.println("""
                 ================================================
-                  SSH/Telnet 蜜罐  v1.0.3  (Java 25)
+                  SSH/Telnet/DB 蜜罐  v1.0.3  (Java 25)
                   仅用于安全研究与授权环境，请勿用于非法用途
                 ================================================
                 """);
@@ -77,6 +80,9 @@ public class Main {
 
         SshHoneypotServer sshServer = null;
         TelnetHoneypotServer telnetServer = null;
+        MySqlHoneypotServer mysqlServer = null;
+        PostgresHoneypotServer postgresServer = null;
+        RedisHoneypotServer redisServer = null;
 
         if (sshEnabled) {
             sshServer = new SshHoneypotServer(config.getSsh().getPort(), fs, attackLogger, guard, hostname);
@@ -86,10 +92,26 @@ public class Main {
             telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger, guard, hostname);
             telnetServer.start();
         }
+        // 数据库蜜罐：连接即返回默认认证失败信息并立即断开，不做任何协议交互
+        if (config.getMysql().isEnabled()) {
+            mysqlServer = new MySqlHoneypotServer(config.getMysql().getPort(), attackLogger);
+            mysqlServer.start();
+        }
+        if (config.getPostgresql().isEnabled()) {
+            postgresServer = new PostgresHoneypotServer(config.getPostgresql().getPort(), attackLogger);
+            postgresServer.start();
+        }
+        if (config.getRedis().isEnabled()) {
+            redisServer = new RedisHoneypotServer(config.getRedis().getPort(), attackLogger);
+            redisServer.start();
+        }
 
-        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, 主机名=%s, 日志=%s, 数据库=%s%n",
+        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, MySQL=%s, PostgreSQL=%s, Redis=%s, 主机名=%s, 日志=%s, 数据库=%s%n",
                 sshEnabled ? String.valueOf(config.getSsh().getPort()) : "关闭",
                 telnetEnabled ? String.valueOf(config.getTelnet().getPort()) : "关闭",
+                config.getMysql().isEnabled() ? String.valueOf(config.getMysql().getPort()) : "关闭",
+                config.getPostgresql().isEnabled() ? String.valueOf(config.getPostgresql().getPort()) : "关闭",
+                config.getRedis().isEnabled() ? String.valueOf(config.getRedis().getPort()) : "关闭",
                 hostname, logFile.toAbsolutePath(), dbFile.toAbsolutePath());
         System.out.println("按 Ctrl+C 停止。");
 
@@ -97,10 +119,16 @@ public class Main {
         CountDownLatch shutdown = new CountDownLatch(1);
         SshHoneypotServer finalSsh = sshServer;
         TelnetHoneypotServer finalTelnet = telnetServer;
+        MySqlHoneypotServer finalMysql = mysqlServer;
+        PostgresHoneypotServer finalPostgres = postgresServer;
+        RedisHoneypotServer finalRedis = redisServer;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\n正在关闭蜜罐...");
             try { if (finalSsh != null) finalSsh.stop(); } catch (Exception ignored) {}
             if (finalTelnet != null) finalTelnet.stop();
+            if (finalMysql != null) finalMysql.stop();
+            if (finalPostgres != null) finalPostgres.stop();
+            if (finalRedis != null) finalRedis.stop();
             try { attackLogger.close(); } catch (Exception ignored) {}
             shutdown.countDown();
         }, "honeypot-shutdown"));

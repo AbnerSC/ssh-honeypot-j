@@ -48,7 +48,7 @@
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
-            <version>3.50.3.0</version>
+            <version>3.53.2.1</version>
         </dependency>
     </dependencies>
 
@@ -127,9 +127,13 @@
                                 <ports>
                                     <port>2222</port>
                                     <port>2323</port>
+                                    <port>3306</port>
+                                    <port>5432</port>
+                                    <port>6379</port>
                                 </ports>
                                 <volumes>
                                     <volume>/app/logs</volume>
+                                    <volume>/app/db</volume>
                                 </volumes>
                             </build>
                         </image>

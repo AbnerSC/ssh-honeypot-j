@@ -39,7 +39,7 @@ public class SqliteLogStore implements AutoCloseable {
             CREATE TABLE IF NOT EXISTS sessions (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id      TEXT    NOT NULL UNIQUE,   -- 会话编号（对应 JSONL 的 session 字段）
-                protocol        TEXT    NOT NULL,          -- 协议: ssh / telnet
+                protocol        TEXT    NOT NULL,          -- 协议: ssh / telnet / mysql / postgresql / redis
                 src_ip          TEXT    NOT NULL,          -- 攻击者来源 IP
                 src_port        INTEGER,                   -- 攻击者来源端口
                 opened_at       TEXT    NOT NULL,          -- 会话开始时间 yyyy-MM-dd HH:mm:ss.SSS
@@ -55,7 +55,7 @@ public class SqliteLogStore implements AutoCloseable {
                 ts          TEXT    NOT NULL,              -- 事件时间 yyyy-MM-dd HH:mm:ss.SSS
                 ts_epoch_ms INTEGER NOT NULL,              -- 事件时间（epoch 毫秒）
                 session_id  TEXT,                          -- 所属会话编号
-                protocol    TEXT,                          -- 协议: ssh / telnet
+                protocol    TEXT,                          -- 协议: ssh / telnet / mysql / postgresql / redis
                 src_ip      TEXT    NOT NULL,              -- 攻击者来源 IP
                 username    TEXT    NOT NULL,              -- 尝试登录的用户名
                 password    TEXT    NOT NULL,              -- 尝试登录的口令
