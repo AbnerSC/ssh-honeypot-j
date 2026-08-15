@@ -15,12 +15,15 @@ import java.util.*;
 public class CommandProcessor {
     private static final Random RANDOM = new Random();
     private final AttackLogger logger;
+    /** 伪装主机名，用于 uname/hostname/env/journalctl 等命令输出 */
+    private final String hostname;
 
     /** exit/logout 时返回的标记 */
     public static final String EXIT_SIGNAL = "\u0000__EXIT__";
 
-    public CommandProcessor(AttackLogger logger) {
+    public CommandProcessor(AttackLogger logger, String hostname) {
         this.logger = logger;
+        this.hostname = hostname;
     }
 
     /**
@@ -110,7 +113,7 @@ public class CommandProcessor {
             case "df" -> df(args);
             case "free" -> free(args);
             case "vmstat" -> vmstat();
-            case "iostat" -> "Linux 5.15.0-91-generic (svr01) \t08/11/26 \t_x86_64_\t(4 CPU)\n\navg-cpu:  %user   %nice %system %iowait  %steal   %idle\n           1.26    0.01    0.68    0.19    0.00   97.85";
+            case "iostat" -> "Linux 5.15.0-91-generic (" + hostname + ") \t08/11/26 \t_x86_64_\t(4 CPU)\n\navg-cpu:  %user   %nice %system %iowait  %steal   %idle\n           1.26    0.01    0.68    0.19    0.00   97.85";
             case "clear" -> "\033[H\033[2J\033[3J";
             case "touch" -> touch(st, args);
             case "mkdir" -> mkdir(st, args);
@@ -550,10 +553,10 @@ public class CommandProcessor {
     private String uname(List<String> args) {
         String flag = args.isEmpty() ? "" : args.getFirst();
         return switch (flag) {
-            case "-a" -> "Linux svr01 5.15.0-91-generic #101-Ubuntu SMP Tue Nov 14 13:30:08 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux";
+            case "-a" -> "Linux " + hostname + " 5.15.0-91-generic #101-Ubuntu SMP Tue Nov 14 13:30:08 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux";
             case "-r" -> "5.15.0-91-generic";
             case "-m" -> "x86_64";
-            case "-n" -> "svr01";
+            case "-n" -> hostname;
             case "-s" -> "Linux";
             case "-v" -> "#101-Ubuntu SMP Tue Nov 14 13:30:08 UTC 2023";
             case "-o" -> "GNU/Linux";
@@ -615,7 +618,7 @@ public class CommandProcessor {
     private String env(SessionState st) {
         return "SHELL=/bin/bash\nUSER=" + st.username + "\nHOME=" + st.homeDir +
                "\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n" +
-               "HOSTNAME=svr01\nTERM=xterm\nLANG=en_US.UTF-8\nPWD=" + st.cwd;
+               "HOSTNAME=" + hostname + "\nTERM=xterm\nLANG=en_US.UTF-8\nPWD=" + st.cwd;
     }
 
     private String df(List<String> args) {
@@ -1002,8 +1005,8 @@ public class CommandProcessor {
     private String hostnameCmd(List<String> args) {
         if (args.contains("-I") || args.contains("--all-ip-addresses")) return "10.23.76.15";
         if (args.contains("-i")) return "10.23.76.15";
-        if (args.contains("-f")) return "svr01.internal";
-        return "svr01";
+        if (args.contains("-f")) return hostname + ".internal";
+        return hostname;
     }
 
     /** 取第一个非选项参数 */
@@ -1100,8 +1103,8 @@ public class CommandProcessor {
     private String journalctl() {
         return "-- Journal begins at Mon 2026-06-24 06:13:02 UTC, ends at " +
                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + " UTC. --\n" +
-               "Aug 11 06:25:01 svr01 systemd[1]: Started Session 42 of user root.\n" +
-               "Aug 11 06:25:03 svr01 sshd[21841]: Accepted password for root from 203.0.113.44 port 51220 ssh2";
+               "Aug 11 06:25:01 " + hostname + " systemd[1]: Started Session 42 of user root.\n" +
+               "Aug 11 06:25:03 " + hostname + " sshd[21841]: Accepted password for root from 203.0.113.44 port 51220 ssh2";
     }
 
     private String tar(SessionState st, List<String> args) {
@@ -1351,7 +1354,7 @@ public class CommandProcessor {
     }
 
     private String neofetch() {
-        return "            .-/+oossssoo+/-.               root@svr01\n" +
+        return "            .-/+oossssoo+/-.               root@" + hostname + "\n" +
                "        `:+ssssssssssssssssss+:`           ------------\n" +
                "      -+ssssssssssssssssssyyssss+-         OS: Ubuntu 22.04.3 LTS x86_64\n" +
                "     /ssssssssssssssssssdMMMNysssso.       Kernel: 5.15.0-91-generic\n" +

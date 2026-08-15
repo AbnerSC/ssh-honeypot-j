@@ -34,17 +34,20 @@ public class TelnetHoneypotServer {
     private final AttackLogger logger;
     private final CommandProcessor processor;
     private final CredentialGuard guard;
+    /** 伪装主机名，用于 login 提示符（如 svr01 login:） */
+    private final String hostname;
     /** 虚拟线程执行器：每个连接一条虚拟线程，替代 cachedThreadPool 平台线程，大幅降低并发连接内存开销 */
     private final ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
     private volatile boolean running = true;
     private ServerSocket serverSocket;
 
-    public TelnetHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard) {
+    public TelnetHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard, String hostname) {
         this.port = port;
         this.fs = fs;
         this.logger = logger;
         this.guard = guard;
-        this.processor = new CommandProcessor(logger);
+        this.hostname = hostname;
+        this.processor = new CommandProcessor(logger, hostname);
     }
 
     public void start() throws IOException {
@@ -92,7 +95,7 @@ public class TelnetHoneypotServer {
                     out.flush();
                     break;
                 }
-                String u = promptLine(in, out, "svr01 login: ", true);
+                String u = promptLine(in, out, hostname + " login: ", true);
                 if (u == null) break;                          // 客户端断开
                 String p = promptLine(in, out, "Password: ", false);
                 if (p == null) p = "";
@@ -115,7 +118,7 @@ public class TelnetHoneypotServer {
             out.flush();
 
             // 进入伪 Shell
-            SessionState state = new SessionState(sessionId, ip, username, fs);
+            SessionState state = new SessionState(sessionId, ip, username, fs, hostname);
             FakeShell shell = new FakeShell(in, out, state, processor, logger, st -> {});
             shell.run();
 

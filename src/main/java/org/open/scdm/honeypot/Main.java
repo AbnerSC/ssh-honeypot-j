@@ -43,6 +43,8 @@ public class Main {
         }
 
         HoneypotConfig config = HoneypotConfig.load(configPath);
+        // 伪装主机名：优先级 Docker 容器 hostname > config.yaml hostname > 默认 svr01
+        String hostname = config.resolveHostname();
         boolean sshEnabled = config.getSsh().isEnabled();
         boolean telnetEnabled = config.getTelnet().isEnabled();
         Path logFile = Path.of(config.getLog().getFile());
@@ -59,12 +61,12 @@ public class Main {
 
         System.out.println("""
                 ================================================
-                  SSH/Telnet 蜜罐  v1.0.2  (Java 25)
+                  SSH/Telnet 蜜罐  v1.0.3  (Java 25)
                   仅用于安全研究与授权环境，请勿用于非法用途
                 ================================================
                 """);
 
-        VirtualFileSystem fs = new VirtualFileSystem();
+        VirtualFileSystem fs = new VirtualFileSystem(hostname);
         AttackLogger attackLogger = new AttackLogger(logFile, dbFile);
 
         // 凭证守卫：密码本校验 + 连续失败锁定源 IP（状态缓存在内存）
@@ -77,18 +79,18 @@ public class Main {
         TelnetHoneypotServer telnetServer = null;
 
         if (sshEnabled) {
-            sshServer = new SshHoneypotServer(config.getSsh().getPort(), fs, attackLogger, guard);
+            sshServer = new SshHoneypotServer(config.getSsh().getPort(), fs, attackLogger, guard, hostname);
             sshServer.start();
         }
         if (telnetEnabled) {
-            telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger, guard);
+            telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger, guard, hostname);
             telnetServer.start();
         }
 
-        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, 日志=%s, 数据库=%s%n",
+        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, 主机名=%s, 日志=%s, 数据库=%s%n",
                 sshEnabled ? String.valueOf(config.getSsh().getPort()) : "关闭",
                 telnetEnabled ? String.valueOf(config.getTelnet().getPort()) : "关闭",
-                logFile.toAbsolutePath(), dbFile.toAbsolutePath());
+                hostname, logFile.toAbsolutePath(), dbFile.toAbsolutePath());
         System.out.println("按 Ctrl+C 停止。");
 
         // 优雅关闭

@@ -6,6 +6,7 @@ import org.yaml.snakeyaml.constructor.Constructor;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import java.util.Map;
  * <p>
  * 配置文件结构示例:
  * <pre>
+ * hostname: svr01
  * ssh:
  *   enabled: true
  *   port: 2222
@@ -39,6 +41,12 @@ import java.util.Map;
 public class HoneypotConfig {
 
     public static final String DEFAULT_CONFIG_FILE = "config.yaml";
+
+    /** 默认伪装主机名（未配置 Docker hostname 且配置文件未指定 hostname 时的兜底值） */
+    public static final String DEFAULT_HOSTNAME = "svr01";
+
+    /** 伪装主机名（config.yaml 中配置），为空时按 {@link #resolveHostname()} 优先级兜底 */
+    private String hostname;
 
     private Ssh ssh = new Ssh();
     private Telnet telnet = new Telnet();
@@ -159,11 +167,60 @@ public class HoneypotConfig {
         }
     }
 
+    /**
+     * 解析生效的伪装主机名。
+     * 优先级：Docker 容器主机名（docker run --hostname / compose hostname）> 配置文件 hostname > 默认值 svr01。
+     * <p>
+     * Docker 未显式配置 hostname 时容器主机名默认为容器 ID（纯十六进制串），
+     * 该情况视为未配置并继续向下兜底，避免蜜罐伪装被随机 ID 破坏。
+     */
+    public String resolveHostname() {
+        if (isRunningInDocker()) {
+            String dockerHostname = systemHostname();
+            if (dockerHostname != null && !looksLikeContainerId(dockerHostname)) {
+                return dockerHostname;
+            }
+        }
+        if (hostname != null && !hostname.isBlank()) {
+            return hostname.trim();
+        }
+        return DEFAULT_HOSTNAME;
+    }
+
+    /** 判断是否运行在容器内（/.dockerenv / container 环境变量 / cgroup 特征） */
+    private static boolean isRunningInDocker() {
+        if (Files.exists(Path.of("/.dockerenv"))) return true;
+        String container = System.getenv("container");
+        if ("docker".equals(container) || "containerd".equals(container) || "podman".equals(container)) return true;
+        try {
+            String cgroup = Files.readString(Path.of("/proc/1/cgroup"));
+            return cgroup.contains("docker") || cgroup.contains("containerd") || cgroup.contains("kubepods");
+        } catch (IOException e) {
+            return false; // Windows 等无 /proc 的环境视为非容器
+        }
+    }
+
+    private static String systemHostname() {
+        try {
+            String h = InetAddress.getLocalHost().getHostName();
+            return (h == null || h.isBlank()) ? null : h;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 容器 ID 为纯十六进制串（短 ID 12 位/长 ID 64 位），形似容器 ID 则判定 Docker 未显式配置 hostname */
+    private static boolean looksLikeContainerId(String name) {
+        return name.length() >= 12 && name.matches("[0-9a-f]+");
+    }
+
+    public String getHostname() { return hostname; }
     public Ssh getSsh() { return ssh; }
     public Telnet getTelnet() { return telnet; }
     public Log getLog() { return log; }
     public Auth getAuth() { return auth; }
 
+    public void setHostname(String hostname) { this.hostname = hostname; }
     public void setSsh(Ssh ssh) { this.ssh = ssh; }
     public void setTelnet(Telnet telnet) { this.telnet = telnet; }
     public void setLog(Log log) { this.log = log; }

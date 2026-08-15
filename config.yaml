@@ -1,4 +1,10 @@
 # SSH/Telnet 蜜罐配置文件
+
+# 伪装主机名（Shell 提示符、uname/hostname/env、/etc/hostname 等处展示）
+# 优先级：Docker 容器主机名（docker run --hostname / compose hostname）> 此处配置 > 默认值 svr01
+# 注：Docker 未显式设置 hostname 时容器主机名为随机容器 ID，该情况自动忽略并回退到此处配置
+hostname: ubuntu
+
 ssh:
   enabled: true      # 是否启用 SSH 服务
   port: 2222         # SSH 监听端口

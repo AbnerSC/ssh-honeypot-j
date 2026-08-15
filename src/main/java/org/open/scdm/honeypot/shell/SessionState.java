@@ -13,17 +13,20 @@ public class SessionState {
     public final String sessionId;
     public final String ip;
     public final VirtualFileSystem fs;
+    /** 伪装主机名，用于提示符（如 root@svr01:~#） */
+    public final String hostname;
     public String username;
     public String cwd;
     public final List<String> history = new ArrayList<>();
     /** 用户主目录绝对路径，root 为 /root，普通用户为 /home/<username> */
     public final String homeDir;
 
-    public SessionState(String sessionId, String ip, String username, VirtualFileSystem fs) {
+    public SessionState(String sessionId, String ip, String username, VirtualFileSystem fs, String hostname) {
         this.sessionId = sessionId;
         this.ip = ip;
         this.username = username;
         this.fs = fs;
+        this.hostname = hostname;
         if ("root".equals(username)) {
             this.homeDir = "/root";
         } else {
@@ -39,6 +42,6 @@ public class SessionState {
         String dir = cwd;
         if (dir.equals(homeDir)) dir = "~";
         else if (dir.startsWith(homeDir + "/")) dir = "~" + dir.substring(homeDir.length());
-        return username + "@svr01:" + dir + ("root".equals(username) ? "# " : "$ ");
+        return username + "@" + hostname + ":" + dir + ("root".equals(username) ? "# " : "$ ");
     }
 }

@@ -41,17 +41,20 @@ public class SshHoneypotServer {
     private final AttackLogger logger;
     private final CommandProcessor processor;
     private final CredentialGuard guard;
+    /** 伪装主机名，透传给会话提示符与命令输出 */
+    private final String hostname;
     private SshServer sshd;
 
     /** sessionId -> 登录用户名（auth 阶段写入，shell 阶段读取） */
     private final Map<String, String> sessionUsers = new ConcurrentHashMap<>();
 
-    public SshHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard) {
+    public SshHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard, String hostname) {
         this.port = port;
         this.fs = fs;
         this.logger = logger;
         this.guard = guard;
-        this.processor = new CommandProcessor(logger);
+        this.hostname = hostname;
+        this.processor = new CommandProcessor(logger, hostname);
     }
 
     public void start() throws IOException {
@@ -145,7 +148,7 @@ public class SshHoneypotServer {
             Session session = ch.getSession();
             String username = sessionUsers.getOrDefault(sessionKey(session), "root");
             String ip = clientIp(session);
-            SessionState state = new SessionState(logger.newSessionId(), ip, username, fs);
+            SessionState state = new SessionState(logger.newSessionId(), ip, username, fs, hostname);
             logger.sessionOpen(state.sessionId, "ssh-shell", ip, clientPort(session));
 
             shell = new FakeShell(in, out, state, processor, logger,
@@ -197,7 +200,7 @@ public class SshHoneypotServer {
                     Session session = channel.getSession();
                     String username = sessionUsers.getOrDefault(sessionKey(session), "root");
                     String ip = clientIp(session);
-                    SessionState state = new SessionState(logger.newSessionId(), ip, username, fs);
+                    SessionState state = new SessionState(logger.newSessionId(), ip, username, fs, hostname);
                     String result = processor.execute(state, command);
                     if (!CommandProcessor.EXIT_SIGNAL.equals(result) && result != null) {
                         out.write(result.replace("\u0000NONL", "").getBytes());

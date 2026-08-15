@@ -10,8 +10,15 @@ import java.util.List;
  */
 public class VirtualFileSystem {
     private final VNode root;
+    /** 伪装主机名，写入 /etc/hostname、/etc/hosts 及系统日志等诱饵文件 */
+    private final String hostname;
 
     public VirtualFileSystem() {
+        this("svr01");
+    }
+
+    public VirtualFileSystem(String hostname) {
+        this.hostname = hostname;
         this.root = buildFs();
     }
 
@@ -257,10 +264,10 @@ public class VirtualFileSystem {
                 "daemon:*:19000:0:99999:7:::\n" +
                 "mysql:!:19312:0:99999:7:::\n" +
                 "admin:$6$rT7vLm$H3kP9wX2nQ5vB8cZ1xM4jS7dF0gH6tY3uI9oL2kN5bV8cX1zA4qW7eR0tY3uI6oP9sD2fG5hJ8kL1mN4bV7:19520:0:99999:7:::\n"));
-        etc.add(VNode.file("hostname", "rw-r--r--", "root", "svr01\n"));
+        etc.add(VNode.file("hostname", "rw-r--r--", "root", hostname + "\n"));
         etc.add(VNode.file("hosts", "rw-r--r--", "root",
                 "127.0.0.1\tlocalhost\n" +
-                "127.0.1.1\tsvr01\n" +
+                "127.0.1.1\t" + hostname + "\n" +
                 "10.0.0.15\tdb.internal\n" +
                 "10.0.0.22\tbackup.internal\n" +
                 "\n# The following lines are desirable for IPv6 capable hosts\n" +
@@ -313,10 +320,10 @@ public class VirtualFileSystem {
         VNode var = VNode.dir("var", "rwxr-xr-x", "root");
         VNode log = VNode.dir("log", "rwxr-xr-x", "root");
         log.add(VNode.file("auth.log", "rw-r-----", "root",
-                "Aug 11 06:25:01 svr01 sshd[21841]: Accepted password for root from 203.0.113.44 port 51220 ssh2\n" +
-                "Aug 11 06:25:03 svr01 sshd[21841]: pam_unix(sshd:session): session opened for user root\n"));
+                "Aug 11 06:25:01 " + hostname + " sshd[21841]: Accepted password for root from 203.0.113.44 port 51220 ssh2\n" +
+                "Aug 11 06:25:03 " + hostname + " sshd[21841]: pam_unix(sshd:session): session opened for user root\n"));
         log.add(VNode.file("syslog", "rw-r-----", "root",
-                "Aug 11 06:25:01 svr01 systemd[1]: Starting Daily apt upgrade and clean activities...\n"));
+                "Aug 11 06:25:01 " + hostname + " systemd[1]: Starting Daily apt upgrade and clean activities...\n"));
         log.add(VNode.file("mysql.log", "rw-r-----", "mysql", ""));
         var.add(log);
         VNode www = VNode.dir("www", "rwxr-xr-x", "root");
