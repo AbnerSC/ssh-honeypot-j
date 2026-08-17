@@ -50,6 +50,12 @@
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.53.2.1</version>
         </dependency>
+        <!-- ip2region：离线 IP 归属地库（xdb 外部库文件），解析攻击来源/访问 IP 为“国家 省份 城市” -->
+        <dependency>
+            <groupId>org.lionsoul</groupId>
+            <artifactId>ip2region</artifactId>
+            <version>3.3.7</version>
+        </dependency>
         <!-- ============ Web 可视化控制台 ============ -->
         <!-- Javalin：轻量嵌入式 Web 框架（Jetty 12 / jakarta.servlet），承载管理 API 与静态前端 -->
         <dependency>

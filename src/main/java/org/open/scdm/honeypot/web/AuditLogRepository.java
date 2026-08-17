@@ -3,6 +3,7 @@ package org.open.scdm.honeypot.web;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.open.scdm.honeypot.geo.IpLocator;
 
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -39,8 +40,11 @@ public class AuditLogRepository implements AutoCloseable {
 
     private final Connection conn;
     private final ExecutorService writer;
+    /** IP 归属地定位器（可为 null，此时归属地留空） */
+    private final IpLocator ipLocator;
 
-    public AuditLogRepository(Path dbFile) throws SQLException {
+    public AuditLogRepository(Path dbFile, IpLocator ipLocator) throws SQLException {
+        this.ipLocator = ipLocator;
         this.conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.toAbsolutePath());
         try (Statement st = conn.createStatement()) {
             st.execute("PRAGMA busy_timeout=5000");
@@ -58,10 +62,24 @@ public class AuditLogRepository implements AutoCloseable {
                         status      INTEGER NOT NULL,                 -- 响应状态码
                         resp_body   TEXT,                            -- 响应体摘要（截断）
                         duration_ms INTEGER NOT NULL,                 -- 处理耗时（毫秒）
-                        ok          INTEGER NOT NULL                  -- 1 成功 / 0 失败
+                        ok          INTEGER NOT NULL,                 -- 1 成功 / 0 失败
+                        location    TEXT                             -- 来源 IP 归属地（国家 省份 城市，ip2region 库解析）
                     )""");
             st.execute("CREATE INDEX IF NOT EXISTS idx_audit_epoch ON sys_audit_log(epoch_ms)");
             st.execute("CREATE INDEX IF NOT EXISTS idx_audit_user ON sys_audit_log(username)");
+            // 存量表迁移：旧表无 location 列时补加（新建表 DDL 已含该列）
+            boolean hasLocation = false;
+            try (ResultSet rs = st.executeQuery("PRAGMA table_info(sys_audit_log)")) {
+                while (rs.next()) {
+                    if ("location".equals(rs.getString("name"))) {
+                        hasLocation = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasLocation) {
+                st.execute("ALTER TABLE sys_audit_log ADD COLUMN location TEXT");
+            }
         }
         ThreadFactory tf = r -> {
             Thread t = new Thread(r, "audit-log-writer");
@@ -71,16 +89,17 @@ public class AuditLogRepository implements AutoCloseable {
         this.writer = Executors.newSingleThreadExecutor(tf);
     }
 
-    /** 异步记录一条审计日志（脱敏 + 截断在调用前完成） */
+    /** 异步记录一条审计日志（脱敏 + 截断在调用前完成）；归属地在写入线程内解析，不阻塞 Web 请求 */
     public void record(String username, String srcIp, String method, String path, String query,
                        String reqBody, int status, String respBody, long durationMs, boolean ok) {
         String ts = LocalDateTime.now().format(TS);
         long epoch = System.currentTimeMillis();
         writer.submit(() -> {
+            String location = (ipLocator == null) ? null : ipLocator.locate(srcIp);
             try (PreparedStatement ps = conn.prepareStatement(
                     "INSERT INTO sys_audit_log(ts, epoch_ms, username, src_ip, method, path, query,"
-                            + " req_body, status, resp_body, duration_ms, ok)"
-                            + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                            + " req_body, status, resp_body, duration_ms, ok, location)"
+                            + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
                 ps.setString(1, ts);
                 ps.setLong(2, epoch);
                 ps.setString(3, username);
@@ -93,6 +112,7 @@ public class AuditLogRepository implements AutoCloseable {
                 ps.setString(10, respBody);
                 ps.setLong(11, durationMs);
                 ps.setInt(12, ok ? 1 : 0);
+                ps.setString(13, location);
                 ps.executeUpdate();
             } catch (SQLException e) {
                 LOG.log(Level.WARNING, "审计日志写入失败", e);

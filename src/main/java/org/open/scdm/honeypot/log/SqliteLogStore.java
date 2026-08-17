@@ -45,7 +45,8 @@ public class SqliteLogStore implements AutoCloseable {
                 opened_at       TEXT    NOT NULL,          -- 会话开始时间 yyyy-MM-dd HH:mm:ss.SSS
                 opened_epoch_ms INTEGER NOT NULL,          -- 会话开始时间（epoch 毫秒，便于时间范围统计）
                 closed_at       TEXT,                      -- 会话结束时间（异常断开时为 NULL）
-                duration_ms     INTEGER                    -- 会话持续时长（毫秒）
+                duration_ms     INTEGER,                   -- 会话持续时长（毫秒）
+                location        TEXT                       -- 来源 IP 归属地（国家 省份 城市，ip2region 库解析）
             )""",
             "CREATE INDEX IF NOT EXISTS idx_sessions_src_ip ON sessions(src_ip)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_opened ON sessions(opened_epoch_ms)",
@@ -122,10 +123,23 @@ public class SqliteLogStore implements AutoCloseable {
             for (String ddl : SCHEMA) {
                 st.execute(ddl);
             }
-            st.execute("PRAGMA user_version=1");
+            // 版本迁移（user_version < 2 的旧库）：sessions 补加 location 列；
+            // 新建库的 DDL 已含该列，重复 ALTER 报错时忽略即可
+            int version = 0;
+            try (var rs = st.executeQuery("PRAGMA user_version")) {
+                if (rs.next()) version = rs.getInt(1);
+            }
+            if (version < 2) {
+                try {
+                    st.execute("ALTER TABLE sessions ADD COLUMN location TEXT");
+                } catch (SQLException ignored) {
+                    // 列已存在（新建库）
+                }
+            }
+            st.execute("PRAGMA user_version=2");
         }
         insertSession = conn.prepareStatement(
-                "INSERT INTO sessions(session_id, protocol, src_ip, src_port, opened_at, opened_epoch_ms) VALUES(?,?,?,?,?,?)");
+                "INSERT INTO sessions(session_id, protocol, src_ip, src_port, opened_at, opened_epoch_ms, location) VALUES(?,?,?,?,?,?,?)");
         closeSession = conn.prepareStatement(
                 "UPDATE sessions SET closed_at = ?, duration_ms = ? WHERE session_id = ?");
         insertAuth = conn.prepareStatement(
@@ -139,13 +153,14 @@ public class SqliteLogStore implements AutoCloseable {
     }
 
     public void recordSessionOpen(LocalDateTime ts, String sessionId, String protocol,
-                                  String ip, int port) throws SQLException {
+                                  String ip, int port, String location) throws SQLException {
         insertSession.setString(1, sessionId);
         insertSession.setString(2, protocol);
         insertSession.setString(3, ip);
         insertSession.setInt(4, port);
         insertSession.setString(5, ts.format(TS));
         insertSession.setLong(6, toEpochMs(ts));
+        insertSession.setString(7, location);
         insertSession.executeUpdate();
     }
 

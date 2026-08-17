@@ -3,6 +3,7 @@ package org.open.scdm.honeypot;
 import org.open.scdm.honeypot.auth.CredentialGuard;
 import org.open.scdm.honeypot.config.HoneypotConfig;
 import org.open.scdm.honeypot.fs.VirtualFileSystem;
+import org.open.scdm.honeypot.geo.IpLocator;
 import org.open.scdm.honeypot.log.AttackLogger;
 import org.open.scdm.honeypot.mysql.MySqlHoneypotServer;
 import org.open.scdm.honeypot.postgres.PostgresHoneypotServer;
@@ -71,7 +72,10 @@ public class Main {
                 """);
 
         VirtualFileSystem fs = new VirtualFileSystem(hostname);
-        AttackLogger attackLogger = new AttackLogger(logFile, dbFile);
+        // IP 归属地定位器：加载外部 ip2region v4/v6 库文件，库缺失时自动降级（归属地留空）
+        IpLocator ipLocator = IpLocator.load(
+                Path.of(config.getLog().getIpdb_v4()), Path.of(config.getLog().getIpdb_v6()));
+        AttackLogger attackLogger = new AttackLogger(logFile, dbFile, ipLocator);
 
         // 凭证守卫：密码本校验 + 连续失败锁定源 IP（状态缓存在内存）
         var authCfg = config.getAuth();
@@ -112,7 +116,7 @@ public class Main {
         var webCfg = config.getWeb();
         if (webCfg.isEnabled()) {
             if (attackLogger.isDbHealthy()) {
-                webServer[0] = WebServer.start(webCfg.getPort(), webCfg.getSessionTimeoutMinutes(), dbFile);
+                webServer[0] = WebServer.start(webCfg.getPort(), webCfg.getSessionTimeoutMinutes(), dbFile, ipLocator);
             } else {
                 System.out.println("SQLite 数据库不可用，Web 控制台未启动。");
             }
@@ -144,6 +148,7 @@ public class Main {
             if (finalRedis != null) finalRedis.stop();
             try { if (webServer[0] != null) webServer[0].stop(); } catch (Exception ignored) {}
             try { attackLogger.close(); } catch (Exception ignored) {}
+            ipLocator.close();
             shutdown.countDown();
         }, "honeypot-shutdown"));
 

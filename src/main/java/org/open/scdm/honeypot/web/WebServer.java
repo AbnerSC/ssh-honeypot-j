@@ -8,6 +8,7 @@ import io.javalin.http.UnauthorizedResponse;
 import io.javalin.http.staticfiles.Location;
 import io.javalin.json.JsonMapper;
 import io.javalin.router.JavalinDefaultRoutingApi;
+import org.open.scdm.honeypot.geo.IpLocator;
 
 import java.io.InputStream;
 import java.lang.reflect.Type;
@@ -39,9 +40,9 @@ public class WebServer implements AutoCloseable {
     /**
      * 启动 Web 控制台。失败不影响蜜罐主服务（仅告警并返回 null）。
      */
-    public static WebServer start(int port, int sessionTimeoutMinutes, Path dbFile) {
+    public static WebServer start(int port, int sessionTimeoutMinutes, Path dbFile, IpLocator ipLocator) {
         try {
-            WebServer server = new WebServer(sessionTimeoutMinutes, dbFile);
+            WebServer server = new WebServer(sessionTimeoutMinutes, dbFile, ipLocator);
             server.app.start(port);
             LOG.info("Web 控制台已启动: http://<host>:" + port + "/ （默认管理员 admin/admin123，首次登录强制改密）");
             return server;
@@ -51,10 +52,10 @@ public class WebServer implements AutoCloseable {
         }
     }
 
-    private WebServer(int sessionTimeoutMinutes, Path dbFile) throws Exception {
+    private WebServer(int sessionTimeoutMinutes, Path dbFile, IpLocator ipLocator) throws Exception {
         this.logRepo = new LogRepository(dbFile);
         this.userRepo = new UserRepository(dbFile);
-        this.auditRepo = new AuditLogRepository(dbFile);
+        this.auditRepo = new AuditLogRepository(dbFile, ipLocator);
         AuthService auth = new AuthService(userRepo);
         this.echartsJs = loadEcharts();
 

@@ -1,5 +1,7 @@
 package org.open.scdm.honeypot.log;
 
+import org.open.scdm.honeypot.geo.IpLocator;
+
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +13,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -36,6 +39,8 @@ public class AttackLogger implements AutoCloseable {
     private final BufferedWriter writer;
     /** SQLite 持久化存储；初始化失败时为 null，退化为仅写 JSONL */
     private final SqliteLogStore db;
+    /** IP 归属地定位器（可为 null，此时归属地留空） */
+    private final IpLocator ipLocator;
     private final AtomicLong sessionSeq = new AtomicLong();
     /** 单线程写入器：串行刷盘，避免 synchronized 阻塞会话线程 */
     private final ExecutorService writePool =
@@ -47,7 +52,8 @@ public class AttackLogger implements AutoCloseable {
         void write(SqliteLogStore store, LocalDateTime ts) throws SQLException;
     }
 
-    public AttackLogger(Path logFile, Path dbFile) throws IOException {
+    public AttackLogger(Path logFile, Path dbFile, IpLocator ipLocator) throws IOException {
+        this.ipLocator = ipLocator;
         Files.createDirectories(logFile.getParent());
         this.writer = Files.newBufferedWriter(logFile, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -72,9 +78,16 @@ public class AttackLogger implements AutoCloseable {
     }
 
     public void sessionOpen(String sessionId, String protocol, String ip, int port) {
-        write(Map.of("event", "session_open", "session", sessionId,
-                "protocol", protocol, "src_ip", ip, "src_port", String.valueOf(port)),
-                (store, ts) -> store.recordSessionOpen(ts, sessionId, protocol, ip, port));
+        // 归属地在会话线程同步解析：xdb 全内存检索微秒级，另有进程内缓存
+        String location = (ipLocator == null) ? null : ipLocator.locate(ip);
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("event", "session_open");
+        fields.put("session", sessionId);
+        fields.put("protocol", protocol);
+        fields.put("src_ip", ip);
+        fields.put("src_port", String.valueOf(port));
+        if (location != null) fields.put("location", location);
+        write(fields, (store, ts) -> store.recordSessionOpen(ts, sessionId, protocol, ip, port, location));
     }
 
     public void authAttempt(String sessionId, String protocol, String ip,

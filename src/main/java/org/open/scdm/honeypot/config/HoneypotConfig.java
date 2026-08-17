@@ -38,6 +38,8 @@ import java.util.Map;
  * log:
  *   file: logs/honeypot.jsonl
  *   db: logs/database.db
+ *   ipdb_v4: db/ip2region_v4.xdb
+ *   ipdb_v6: db/ip2region_v6.xdb
  * web:
  *   enabled: true
  *   port: 8080
@@ -130,12 +132,20 @@ public class HoneypotConfig {
     public static class Log {
         private String file = Path.of("logs", "honeypot.jsonl").toString();
         private String db = Path.of("logs", "database.db").toString();
+        /** IPv4 归属地离线库文件（ip2region xdb），缺失时 v4 归属地留空，不影响启动 */
+        private String ipdb_v4 = Path.of("db", "ip2region_v4.xdb").toString();
+        /** IPv6 归属地离线库文件（ip2region xdb），缺失时 v6 归属地留空，不影响启动 */
+        private String ipdb_v6 = Path.of("db", "ip2region_v6.xdb").toString();
 
         public String getFile() { return file; }
         public String getDb() { return db; }
+        public String getIpdb_v4() { return ipdb_v4; }
+        public String getIpdb_v6() { return ipdb_v6; }
 
         public void setFile(String file) { this.file = file; }
         public void setDb(String db) { this.db = db; }
+        public void setIpdb_v4(String ipdb_v4) { this.ipdb_v4 = ipdb_v4; }
+        public void setIpdb_v6(String ipdb_v6) { this.ipdb_v6 = ipdb_v6; }
     }
 
     /** Web 可视化控制台：攻击日志统计/明细查询 + 系统用户管理，与蜜罐同进程同 jar 部署 */
