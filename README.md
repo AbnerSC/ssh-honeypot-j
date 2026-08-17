@@ -241,10 +241,6 @@ config.yaml                              # 系统配置信息
 - **登录安全**：PBKDF2-HMAC-SHA256 加盐哈希、服务端 Session（HttpOnly Cookie）、
   首次登录强制改密、登录失败 IP 锁定、会话固定攻击防护。
 
-**依赖**
-- 新增 javalin `6.7.0`、gson `2.13.1`、echarts WebJar `5.5.1`；
-  sqlite-jdbc `3.53.2.1`（此前仅用于双写，本期启用 Web 查询）。
-
 ---
 
 ### v1.0.3（2026-08-14）
