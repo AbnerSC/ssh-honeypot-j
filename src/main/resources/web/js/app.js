@@ -87,12 +87,13 @@ async function init() {
 
 const TITLES = {
     dashboard: '攻击总览', sessions: '会话记录', auth: '登录尝试',
-    commands: '命令记录', downloads: '恶意下载', locks: 'IP 锁定', users: '用户管理'
+    commands: '命令记录', downloads: '恶意下载', locks: 'IP 锁定',
+    audit: '操作审计', users: '用户管理'
 };
 
 function render() {
     const page = (location.hash.replace('#', '') || 'dashboard');
-    if (!(page in TITLES) || (page === 'users' && CURRENT_USER.role !== 'admin')) {
+    if (!(page in TITLES) || ((page === 'users' || page === 'audit') && CURRENT_USER.role !== 'admin')) {
         location.hash = '#dashboard';
         return;
     }
@@ -218,7 +219,7 @@ const PROTOCOL_TAG = { ssh: 'cyan', telnet: 'orange', mysql: 'green', postgresql
 
 function tableView(cfg) {
     return async function (el) {
-        const state = { page: 1, size: 20 };
+        const state = { page: 1, size: 15 };
         el.innerHTML = `
             <div class="filters" id="tv-filters">
                 ${cfg.filters.map((f) => f.html).join('')}
@@ -564,6 +565,31 @@ const VIEWS = {
             { key: 'src_ip', label: '来源 IP', cls: 'mono' },
             { key: 'locked_until', label: '解除时间', render: (r) => fmtTs(r.locked_until) },
             { key: 'lockedActive', label: '状态', render: (r) => r.lockedActive ? '<span class="tag red">锁定中</span>' : '<span class="tag gray">已解除</span>' }
+        ]
+    }),
+
+    audit: tableView({
+        api: '/api/audit-logs',
+        filters: [
+            textFilter('f-user', '操作用户', 'username'),
+            textFilter('f-ip', '来源 IP', 'srcIp'),
+            {
+                html: '<select id="f-method" style="width:100px"><option value="">全部方法</option><option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="DELETE">DELETE</option></select>',
+                params() { return { method: document.getElementById('f-method').value }; }
+            },
+            textFilter('f-path', '路径关键字', 'path', 200),
+            dateRangeFilter()
+        ],
+        cols: [
+            { key: 'ts', label: '时间', render: (r) => esc(r.ts) },
+            { key: 'username', label: '操作用户', cls: 'mono', render: (r) => r.username || '<span class="tag gray">未登录</span>' },
+            { key: 'src_ip', label: '来源 IP', cls: 'mono' },
+            { key: 'method', label: '方法', render: (r) => '<span class="tag">' + esc(r.method) + '</span>' },
+            { key: 'path', label: '路径', cls: 'mono cell', title: true },
+            { key: 'query', label: '查询参数', cls: 'mono cell', title: true, render: (r) => r.query ? esc(r.query) : '-' },
+            { key: 'req_body', label: '请求体', cls: 'mono cell', title: true, render: (r) => r.req_body ? esc(r.req_body) : '-' },
+            { key: 'status', label: '状态码', render: (r) => r.status < 400 ? '<span class="tag green">' + r.status + '</span>' : '<span class="tag red">' + r.status + '</span>' },
+            { key: 'duration_ms', label: '耗时', render: (r) => r.duration_ms + 'ms' }
         ]
     }),
 

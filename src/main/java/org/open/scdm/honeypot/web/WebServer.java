@@ -33,6 +33,7 @@ public class WebServer implements AutoCloseable {
     private final Javalin app;
     private final LogRepository logRepo;
     private final UserRepository userRepo;
+    private final AuditLogRepository auditRepo;
     private final String echartsJs;
 
     /**
@@ -53,6 +54,7 @@ public class WebServer implements AutoCloseable {
     private WebServer(int sessionTimeoutMinutes, Path dbFile) throws Exception {
         this.logRepo = new LogRepository(dbFile);
         this.userRepo = new UserRepository(dbFile);
+        this.auditRepo = new AuditLogRepository(dbFile);
         AuthService auth = new AuthService(userRepo);
         this.echartsJs = loadEcharts();
 
@@ -87,7 +89,19 @@ public class WebServer implements AutoCloseable {
             }
 
             JavalinDefaultRoutingApi routes = config.routes;
+            // 审计中间件：before 记录起始时间与请求体，after 落库（Javalin 7 中 after 先于 before 执行）
+            routes.before(ctx -> {
+                String p = ctx.path();
+                if (p.startsWith("/api/") && !p.startsWith("/api/vendor/")) {
+                    ctx.attribute("auditStart", System.currentTimeMillis());
+                    try {
+                        ctx.attribute("auditReqBody", ctx.body());
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
             routes.before(this::authGuard);
+            routes.after(this::auditMiddleware);
 
             // 统一异常输出为 JSON；未登录访问页面时重定向到登录页
             routes.exception(UnauthorizedResponse.class, (e, ctx) -> {
@@ -114,7 +128,7 @@ public class WebServer implements AutoCloseable {
                 ctx.json(Map.of("ok", false, "error", "服务器内部错误"));
             });
 
-            new ApiController(logRepo, userRepo, auth).register(routes);
+            new ApiController(logRepo, userRepo, auth, auditRepo).register(routes);
 
             // ECharts 图表库：从 WebJar 类路径加载一次，长期驻留内存输出
             routes.get("/api/vendor/echarts.js", ctx ->
@@ -136,6 +150,43 @@ public class WebServer implements AutoCloseable {
                 throw new UnauthorizedResponse("未登录或会话已过期");
             }
         }
+    }
+
+    /** 审计中间件（after）：读取 before 阶段存入的请求起始时间与请求体，响应完成后落库 */
+    private void auditMiddleware(Context ctx) {
+        String path = ctx.path();
+        if (!path.startsWith("/api/") || path.startsWith("/api/vendor/")) {
+            return;
+        }
+        Long startAttr = ctx.attribute("auditStart");
+        if (startAttr == null) return;
+        long duration = System.currentTimeMillis() - startAttr;
+        String reqBody = ctx.attribute("auditReqBody");
+
+        int status = ctx.statusCode();
+        boolean ok = status < 400;
+
+        String username = null;
+        Map<String, Object> session = AuthService.currentUser(ctx);
+        if (session != null) {
+            username = (String) session.get("username");
+        }
+
+        // 响应体摘要：成功记 {"ok":true}，失败记状态码，避免存储大列表
+        String respBody = ok ? "{\"ok\":true}" : "{\"ok\":false,\"status\":" + status + "}";
+
+        auditRepo.record(
+                username,
+                ctx.ip(),
+                ctx.method().name(),
+                path,
+                ctx.queryString(),
+                AuditLogRepository.maskBody(reqBody),
+                status,
+                respBody,
+                duration,
+                ok
+        );
     }
 
     /**
@@ -179,6 +230,10 @@ public class WebServer implements AutoCloseable {
         }
         try {
             userRepo.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            auditRepo.close();
         } catch (Exception ignored) {
         }
     }

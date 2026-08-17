@@ -23,11 +23,13 @@ public class ApiController {
     private final LogRepository logs;
     private final UserRepository users;
     private final AuthService auth;
+    private final AuditLogRepository audit;
 
-    public ApiController(LogRepository logs, UserRepository users, AuthService auth) {
+    public ApiController(LogRepository logs, UserRepository users, AuthService auth, AuditLogRepository audit) {
         this.logs = logs;
         this.users = users;
         this.auth = auth;
+        this.audit = audit;
     }
 
     /** Javalin 7：路由改为在 Javalin.create 配置块内前置注册 */
@@ -63,6 +65,19 @@ public class ApiController {
                 ctx.queryParam("srcIp"), ctx.queryParam("keyword"),
                 longParam(ctx, "start"), longParam(ctx, "end"), page(ctx), size(ctx))));
         app.get("/api/ip-locks", ctx -> ok(ctx, logs.ipLocks(ctx.queryParam("srcIp"), page(ctx), size(ctx))));
+
+        // ---------- 系统操作审计日志（仅 admin） ----------
+        app.get("/api/audit-logs", ctx -> {
+            AuthService.requireAdmin(ctx);
+            ok(ctx, audit.list(
+                    ctx.queryParam("username"), ctx.queryParam("srcIp"),
+                    ctx.queryParam("method"), ctx.queryParam("path"),
+                    longParam(ctx, "start"), longParam(ctx, "end"), page(ctx), size(ctx)));
+        });
+        app.get("/api/audit-logs/trend", ctx -> {
+            AuthService.requireAdmin(ctx);
+            ok(ctx, audit.trend(daysParam(ctx)));
+        });
 
         // ---------- 系统用户管理（仅 admin） ----------
         app.get("/api/users", ctx -> {
