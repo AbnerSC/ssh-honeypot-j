@@ -213,3 +213,70 @@ td.cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
 .form-error { color: var(--red); font-size: 12px; min-height: 18px; margin-bottom: 8px; }
 
 .loading, .empty-row { color: var(--text2); text-align: center; padding: 30px; }
+
+/* ---------- 日期时间选择器 ---------- */
+.dt-field { position: relative; display: inline-flex; align-items: center; }
+.dt-input { width: 168px; padding-right: 28px; cursor: pointer; }
+.dt-icon { position: absolute; right: 9px; font-size: 12px; opacity: .55; pointer-events: none; }
+.dtp {
+    position: fixed;
+    z-index: 120;
+    width: 268px;
+    padding: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, .5);
+    user-select: none;
+}
+.dtp.hide { display: none; }
+.dtp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.dtp-title { font-size: 13px; font-weight: 600; }
+.dtp-nav {
+    background: none;
+    border: none;
+    color: var(--text2);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 10px;
+    border-radius: 6px;
+}
+.dtp-nav:hover { background: #152238; color: var(--text); }
+.dtp-week, .dtp-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.dtp-week span { text-align: center; font-size: 11px; color: var(--text2); padding: 4px 0; }
+.dtp-day {
+    background: none;
+    border: none;
+    color: var(--text);
+    padding: 5px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+}
+.dtp-day:hover { background: #152238; }
+.dtp-day.muted { color: #54688a; }
+.dtp-day.today { color: var(--accent); font-weight: 700; }
+.dtp-day.sel { background: rgba(34, 211, 238, .18); color: var(--accent); font-weight: 600; }
+.dtp-time { display: flex; gap: 6px; align-items: center; margin: 10px 0; color: var(--text2); font-size: 12px; }
+.dtp-time input { width: 52px; padding: 4px 6px; text-align: center; }
+.dtp-actions { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 10px; }
+.dtp-right { display: flex; gap: 8px; }
+
+/* ---------- 带明暗切换的密码输入框 ---------- */
+.pwd-box { position: relative; }
+.pwd-box input { width: 100%; padding-right: 38px; }
+.pwd-eye {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 2px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    opacity: .45;
+}
+.pwd-eye:hover, .pwd-eye.on { opacity: 1; }
+.modal-tip { color: var(--text2); font-size: 12px; margin-bottom: 6px; }

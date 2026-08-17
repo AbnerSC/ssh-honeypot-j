@@ -31,19 +31,173 @@ function showModal(id, show) {
 }
 
 function dateRangeFilter() {
+    const field = (id, ph) =>
+        `<span class="dt-field"><input id="${id}" class="dt-input" readonly placeholder="${ph}"><span class="dt-icon">🗓</span></span>`;
     return {
-        html: '<input type="datetime-local" id="f-start" title="开始时间"> ~ ' +
-            '<input type="datetime-local" id="f-end" title="结束时间">',
+        html: field('f-start', '开始时间') + ' ~ ' + field('f-end', '结束时间'),
+        init() {
+            DtPicker.bind(document.getElementById('f-start'));
+            DtPicker.bind(document.getElementById('f-end'));
+        },
         params() {
             const p = {};
-            const s = document.getElementById('f-start')?.value;
-            const e = document.getElementById('f-end')?.value;
-            if (s) p.start = new Date(s).getTime();
-            if (e) p.end = new Date(e).getTime() + 59999; // 含结束时间的当分钟
+            const s = document.getElementById('f-start')?.dataset.ts;
+            const e = document.getElementById('f-end')?.dataset.ts;
+            if (s) p.start = +s;
+            if (e) p.end = +e + 59999; // 含结束时间的当分钟
             return p;
         }
     };
 }
+
+// ============================ 日期时间选择器 ============================
+// 自绘轻量日历面板（无外部依赖）：月历 + 时分 + 快捷操作，供时间范围查询条件使用
+
+const DtPicker = (() => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
+    let pop = null;    // 弹出面板
+    let anchor = null; // 正在编辑的输入框
+    let view = null;   // { y, m } 日历当前展示月
+    let sel = null;    // 当前选中的时间
+
+    function build() {
+        pop = document.createElement('div');
+        pop.className = 'dtp hide';
+        pop.innerHTML = `
+            <div class="dtp-head">
+                <button type="button" class="dtp-nav" data-nav="-1">‹</button>
+                <span class="dtp-title" id="dtp-title"></span>
+                <button type="button" class="dtp-nav" data-nav="1">›</button>
+            </div>
+            <div class="dtp-week">${WEEK.map((w) => `<span>${w}</span>`).join('')}</div>
+            <div class="dtp-grid" id="dtp-grid"></div>
+            <div class="dtp-time">
+                <span>时间</span>
+                <input id="dtp-hh" type="number" min="0" max="23"> :
+                <input id="dtp-mm" type="number" min="0" max="59">
+                <button type="button" class="btn sm ghost" id="dtp-now">此刻</button>
+            </div>
+            <div class="dtp-actions">
+                <button type="button" class="btn sm" id="dtp-clear">清空</button>
+                <span class="dtp-right">
+                    <button type="button" class="btn sm" id="dtp-cancel">取消</button>
+                    <button type="button" class="btn sm primary" id="dtp-ok">确定</button>
+                </span>
+            </div>`;
+        document.body.appendChild(pop);
+
+        const hh = pop.querySelector('#dtp-hh');
+        const mm = pop.querySelector('#dtp-mm');
+        const clamp = (v, max) => Math.max(0, Math.min(max, parseInt(v) || 0));
+
+        pop.querySelector('[data-nav="-1"]').onclick = () => shiftMonth(-1);
+        pop.querySelector('[data-nav="1"]').onclick = () => shiftMonth(1);
+        pop.querySelector('#dtp-grid').addEventListener('click', (e) => {
+            const b = e.target.closest('.dtp-day');
+            if (!b) return;
+            const d = new Date(+b.dataset.ts);
+            d.setHours(sel.getHours(), sel.getMinutes(), 0, 0);
+            sel = d;
+            view = { y: d.getFullYear(), m: d.getMonth() };
+            renderPanel();
+        });
+        hh.addEventListener('change', () => { sel.setHours(clamp(hh.value, 23)); renderTime(); });
+        mm.addEventListener('change', () => { sel.setMinutes(clamp(mm.value, 59)); renderTime(); });
+        pop.querySelector('#dtp-now').onclick = () => {
+            sel = new Date();
+            view = { y: sel.getFullYear(), m: sel.getMonth() };
+            renderPanel();
+        };
+        pop.querySelector('#dtp-clear').onclick = () => {
+            anchor.value = '';
+            delete anchor.dataset.ts;
+            close();
+        };
+        pop.querySelector('#dtp-cancel').onclick = close;
+        pop.querySelector('#dtp-ok').onclick = () => {
+            anchor.value = fmt(sel);
+            anchor.dataset.ts = sel.getTime();
+            close();
+        };
+
+        document.addEventListener('mousedown', (e) => {
+            if (!pop || pop.classList.contains('hide')) return;
+            if (e.target === anchor || pop.contains(e.target)) return;
+            close();
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        window.addEventListener('scroll', close, true); // 滚动时收起，避免面板错位
+        window.addEventListener('resize', close);
+        window.addEventListener('hashchange', close);
+    }
+
+    function shiftMonth(dm) {
+        const d = new Date(view.y, view.m + dm, 1);
+        view = { y: d.getFullYear(), m: d.getMonth() };
+        renderPanel();
+    }
+
+    function renderPanel() {
+        pop.querySelector('#dtp-title').textContent = `${view.y} 年 ${view.m + 1} 月`;
+        const first = new Date(view.y, view.m, 1);
+        const start = new Date(view.y, view.m, 1 - (first.getDay() + 6) % 7); // 周一起始，固定铺满 6 行
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let html = '';
+        for (let i = 0; i < 42; i++) {
+            const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+            const cls = [];
+            if (d.getMonth() !== view.m) cls.push('muted');
+            if (+d === +today) cls.push('today');
+            if (sel && d.getFullYear() === sel.getFullYear() &&
+                d.getMonth() === sel.getMonth() && d.getDate() === sel.getDate()) cls.push('sel');
+            html += `<button type="button" class="dtp-day${cls.length ? ' ' + cls.join(' ') : ''}" data-ts="${d.getTime()}">${d.getDate()}</button>`;
+        }
+        pop.querySelector('#dtp-grid').innerHTML = html;
+        renderTime();
+    }
+
+    function renderTime() {
+        pop.querySelector('#dtp-hh').value = pad(sel.getHours());
+        pop.querySelector('#dtp-mm').value = pad(sel.getMinutes());
+    }
+
+    function position() {
+        const r = anchor.getBoundingClientRect();
+        const w = pop.offsetWidth, h = pop.offsetHeight;
+        let left = r.left, top = r.bottom + 6;
+        if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 6); // 下方放不下则向上弹出
+        if (left + w > innerWidth - 8) left = Math.max(8, innerWidth - w - 8);
+        pop.style.left = left + 'px';
+        pop.style.top = top + 'px';
+    }
+
+    function open(input) {
+        if (!pop) build();
+        anchor = input;
+        sel = input.dataset.ts ? new Date(+input.dataset.ts) : new Date();
+        view = { y: sel.getFullYear(), m: sel.getMonth() };
+        renderPanel();
+        pop.classList.remove('hide');
+        position();
+    }
+
+    function close() {
+        if (pop) pop.classList.add('hide');
+        anchor = null;
+    }
+
+    return {
+        bind(input) {
+            input.addEventListener('click', () => {
+                if (anchor === input && pop && !pop.classList.contains('hide')) close();
+                else open(input);
+            });
+        }
+    };
+})();
 
 // ============================ 启动 ============================
 
@@ -227,9 +381,13 @@ function tableView(cfg) {
                 </table>
             </div>
             <div class="pager" id="tv-pager"></div>`;
+        cfg.filters.forEach((f) => f.init && f.init()); // 时间选择器等筛选组件的 DOM 绑定
         document.getElementById('tv-search').onclick = () => { state.page = 1; load(); };
         document.getElementById('tv-reset').onclick = () => {
-            document.querySelectorAll('#tv-filters input, #tv-filters select').forEach((i) => i.value = '');
+            document.querySelectorAll('#tv-filters input, #tv-filters select').forEach((i) => {
+                i.value = '';
+                delete i.dataset.ts; // 清除时间选择器暂存的毫秒值
+            });
             state.page = 1;
             load();
         };
@@ -315,7 +473,7 @@ function viewUsers(el) {
                     <td>${fmtTs(u.createdAt)}</td>
                     <td>${fmtTs(u.lastLoginAt)}</td>
                     <td>
-                        <button class="btn sm" data-act="pwd" data-id="${u.id}">重置密码</button>
+                        <button class="btn sm" data-act="pwd" data-id="${u.id}" data-user="${esc(u.username)}">重置密码</button>
                         <button class="btn sm" data-act="toggle" data-id="${u.id}">${u.enabled ? '禁用' : '启用'}</button>
                         <button class="btn sm danger" data-act="del" data-id="${u.id}">删除</button>
                     </td>
@@ -330,10 +488,8 @@ function viewUsers(el) {
         const id = btn.dataset.id;
         try {
             if (btn.dataset.act === 'pwd') {
-                const pwd = prompt('输入新密码（至少 8 位，用户下次登录需强制修改）：');
-                if (pwd === null) return;
-                await API.put(`/api/users/${id}/password`, { password: pwd, mustChange: true });
-                toast('密码已重置');
+                openResetPwdModal(id, btn.dataset.user, loadUsers); // 弹窗异步确认，由回调刷新列表
+                return;
             } else if (btn.dataset.act === 'toggle') {
                 const enable = btn.textContent === '启用';
                 await API.put(`/api/users/${id}/status`, { enabled: enable });
@@ -384,6 +540,68 @@ function openUserModal() {
             mask.querySelector('#nu-err').textContent = e.message;
         }
     };
+}
+
+// ============================ 重置密码弹窗 ============================
+
+function openResetPwdModal(uid, username, onDone) {
+    const mask = document.createElement('div');
+    mask.className = 'modal-mask';
+    mask.innerHTML = `
+        <div class="modal">
+            <div class="modal-head">重置密码 · ${esc(username)}</div>
+            <div class="field">
+                <label>新密码</label>
+                <div class="pwd-box">
+                    <input id="rp-pwd" type="password" autocomplete="new-password" placeholder="至少 8 位">
+                    <button type="button" class="pwd-eye" data-for="rp-pwd" title="显示/隐藏密码">👁</button>
+                </div>
+            </div>
+            <div class="field">
+                <label>确认新密码</label>
+                <div class="pwd-box">
+                    <input id="rp-pwd2" type="password" autocomplete="new-password">
+                    <button type="button" class="pwd-eye" data-for="rp-pwd2" title="显示/隐藏密码">👁</button>
+                </div>
+            </div>
+            <div class="form-error" id="rp-err"></div>
+            <div class="modal-tip">重置后，该用户下次登录将被强制修改此密码</div>
+            <div class="modal-actions">
+                <button class="btn" id="rp-cancel">取消</button>
+                <button class="btn primary" id="rp-ok">确定</button>
+            </div>
+        </div>`;
+    document.body.appendChild(mask);
+    const pwd = mask.querySelector('#rp-pwd');
+    const pwd2 = mask.querySelector('#rp-pwd2');
+    const err = mask.querySelector('#rp-err');
+    const closeMask = () => mask.remove();
+    mask.querySelectorAll('.pwd-eye').forEach((b) => b.onclick = () => {
+        const inp = mask.querySelector('#' + b.dataset.for);
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+        b.classList.toggle('on');
+        inp.focus();
+    });
+    const submit = async () => {
+        if (pwd.value.length < 8) { err.textContent = '新密码长度至少 8 位'; return; }
+        if (pwd.value !== pwd2.value) { err.textContent = '两次输入的密码不一致'; return; }
+        try {
+            await API.put(`/api/users/${uid}/password`, { password: pwd.value, mustChange: true });
+            closeMask();
+            toast('密码已重置');
+            onDone && onDone();
+        } catch (e) {
+            err.textContent = e.message;
+        }
+    };
+    mask.querySelector('#rp-cancel').onclick = closeMask;
+    mask.querySelector('#rp-ok').onclick = submit;
+    mask.addEventListener('mousedown', (e) => { if (e.target === mask) closeMask(); });
+    mask.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submit();
+        else if (e.key === 'Escape') closeMask();
+    });
+    pwd.focus();
 }
 
 // ============================ 修改密码弹窗 ============================
