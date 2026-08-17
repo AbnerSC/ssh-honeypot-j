@@ -132,9 +132,9 @@ public class HoneypotConfig {
     public static class Log {
         private String file = Path.of("logs", "honeypot.jsonl").toString();
         private String db = Path.of("logs", "database.db").toString();
-        /** IPv4 归属地离线库文件（ip2region xdb），缺失时 v4 归属地留空，不影响启动 */
+        /** IPv4 归属地离线库文件（ip2region xdb），文件缺失时回退 jar 内置库，可选覆盖项 */
         private String ipdb_v4 = Path.of("db", "ip2region_v4.xdb").toString();
-        /** IPv6 归属地离线库文件（ip2region xdb），缺失时 v6 归属地留空，不影响启动 */
+        /** IPv6 归属地离线库文件（ip2region xdb），文件缺失时回退 jar 内置库，可选覆盖项 */
         private String ipdb_v6 = Path.of("db", "ip2region_v6.xdb").toString();
 
         public String getFile() { return file; }

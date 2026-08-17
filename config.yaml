@@ -31,7 +31,7 @@ log:
   db: db/database.db        # SQLite 数据库文件（与 JSONL 双写同一份数据，供 Web 可视化）
   ipdb_v4: db/ip2region_v4.xdb  # IP 归属地离线库文件（ip2region xdb 格式 ipv4），解析来源 IP 为“国家 省份 城市”；
   ipdb_v6: db/ip2region_v6.xdb  # IP 归属地离线库文件（ip2region xdb 格式 ipv6），解析来源 IP 为“国家 省份 城市”；
-                            # 文件缺失时归属地留空，不影响其他功能（可从 https://github.com/lionsoul2014/ip2region 获取）
+                            # 可选覆盖项：文件缺失时自动回退使用 jar 内置库（已随包打包），均缺失时归属地留空，不影响其他功能
 
 # Web 可视化控制台：攻击日志统计与明细查询、系统用户管理（与蜜罐同进程部署）
 # 首次启动自动创建默认管理员 admin/admin123，登录后强制修改密码

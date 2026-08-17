@@ -3,6 +3,7 @@ package org.open.scdm.honeypot.geo;
 import org.lionsoul.ip2region.service.Config;
 import org.lionsoul.ip2region.service.Ip2Region;
 
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -10,10 +11,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
- * IP 归属地定位器：基于 ip2region 3.x 的 xdb 外部库文件离线解析 IPv4/IPv6 归属地，
+ * IP 归属地定位器：基于 ip2region 3.x 的 xdb 库文件离线解析 IPv4/IPv6 归属地，
  * 供攻击日志（sessions）与 Web 审计日志（sys_audit_log）记录“国家 省份 城市”。
  * <p>
- * v4 / v6 两个库文件独立可选：哪个存在加载哪个，仅单边可用时另一边查询返回 null；
+ * 库文件加载优先级：配置的外部文件路径 > jar 内置资源（db/ip2region_v4.xdb、db/ip2region_v6.xdb，
+ * 随 fat-jar 打包，部署无需额外携带）；v4 / v6 两个库独立可选，仅单边可用时另一边查询返回 null；
  * 均采用 BufferCache 策略将库文件整体加载进内存（v4 约 11MB），查询为纯内存检索，
  * 无锁竞争、无磁盘 I/O，结果另加进程内缓存，同一 IP 仅首次查询命中 xdb。
  * <p>
@@ -27,6 +29,10 @@ public class IpLocator implements AutoCloseable {
     /** 缓存容量上限：蜜罐场景来源 IP 数量有限，超限后仅查询不缓存，防止异常流量撑爆内存 */
     private static final int CACHE_LIMIT = 65536;
 
+    /** jar 内置 xdb 库资源路径：随 fat-jar 打包，外部文件缺失时兜底加载 */
+    private static final String BUILTIN_V4 = "db/ip2region_v4.xdb";
+    private static final String BUILTIN_V6 = "db/ip2region_v6.xdb";
+
     /** ip2region v4+v6 统一查询服务；两个库文件均不可用时为 null（降级为空实现） */
     private final Ip2Region searcher;
 
@@ -38,12 +44,12 @@ public class IpLocator implements AutoCloseable {
     }
 
     /**
-     * 加载 v4 / v6 xdb 库文件并构造定位器；文件缺失或加载失败时对应库跳过，
+     * 加载 v4 / v6 xdb 库文件并构造定位器；外部文件缺失时回退加载 jar 内置资源，
      * 两者均不可用时返回降级实例并告警，不抛异常。
      */
     public static IpLocator load(Path v4File, Path v6File) {
-        Config v4Config = buildConfig(v4File, true);
-        Config v6Config = buildConfig(v6File, false);
+        Config v4Config = buildConfig(v4File, BUILTIN_V4, true);
+        Config v6Config = buildConfig(v6File, BUILTIN_V6, false);
         if (v4Config == null && v6Config == null) {
             LOG.warning("未加载到任何 IP 库文件（log.ipdb_v4 / log.ipdb_v6），归属地留空");
             return new IpLocator(null);
@@ -58,25 +64,33 @@ public class IpLocator implements AutoCloseable {
         }
     }
 
-    /** 构造单侧库配置；文件缺失或加载失败时返回 null（该侧跳过） */
-    private static Config buildConfig(Path xdbFile, boolean v4) {
+    /** 构造单侧库配置：优先外部文件，缺失时回退 jar 内置资源，均不可用时返回 null（该侧跳过） */
+    private static Config buildConfig(Path xdbFile, String builtinResource, boolean v4) {
         String tag = v4 ? "v4" : "v6";
-        if (xdbFile == null || xdbFile.toString().isBlank()) {
-            LOG.info("未配置 " + tag + " IP 库文件，" + tag + " 归属地留空");
-            return null;
-        }
-        if (Files.notExists(xdbFile)) {
-            LOG.warning(tag + " IP 库文件不存在: " + xdbFile.toAbsolutePath()
-                    + "（放置 ip2region " + tag + " xdb 后即可解析对应归属地）");
-            return null;
+        boolean external = xdbFile != null && !xdbFile.toString().isBlank() && Files.exists(xdbFile);
+        if (xdbFile != null && !xdbFile.toString().isBlank() && !external) {
+            LOG.info(tag + " IP 库文件不存在: " + xdbFile.toAbsolutePath() + "，回退使用 jar 内置库");
         }
         try {
-            var builder = Config.custom()
-                    // BufferCache：库文件整体进内存，纯内存检索，蜜罐低流量场景最优
-                    .setCachePolicy(Config.BufferCache)
-                    .setXdbFile(xdbFile.toFile());
+            // BufferCache：库文件整体进内存，纯内存检索，蜜罐低流量场景最优
+            var builder = Config.custom().setCachePolicy(Config.BufferCache);
+            String source;
+            if (external) {
+                builder.setXdbFile(xdbFile.toFile());
+                source = xdbFile.toAbsolutePath().toString();
+            } else {
+                // 注意：ip2region 惰性读取该流，不可提前关闭，由 Ip2Region 服务持有至 close()
+                InputStream in = IpLocator.class.getResourceAsStream("/" + builtinResource);
+                if (in == null) {
+                    LOG.warning(tag + " IP 库既无外部文件也无 jar 内置资源 " + builtinResource
+                            + "，" + tag + " 归属地留空");
+                    return null;
+                }
+                builder.setXdbInputStream(in);
+                source = "classpath:" + builtinResource;
+            }
             Config config = v4 ? builder.asV4() : builder.asV6();
-            LOG.info(tag + " IP 归属地库已加载: " + xdbFile.toAbsolutePath());
+            LOG.info(tag + " IP 归属地库已加载: " + source);
             return config;
         } catch (Exception e) {
             LOG.warning(tag + " IP 库文件加载失败，" + tag + " 归属地留空: " + e.getMessage());

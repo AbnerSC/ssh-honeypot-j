@@ -72,7 +72,7 @@ public class Main {
                 """);
 
         VirtualFileSystem fs = new VirtualFileSystem(hostname);
-        // IP 归属地定位器：加载外部 ip2region v4/v6 库文件，库缺失时自动降级（归属地留空）
+        // IP 归属地定位器：优先加载外部 ip2region v4/v6 库文件，缺失时回退 jar 内置库，均不可用时自动降级（归属地留空）
         IpLocator ipLocator = IpLocator.load(
                 Path.of(config.getLog().getIpdb_v4()), Path.of(config.getLog().getIpdb_v6()));
         AttackLogger attackLogger = new AttackLogger(logFile, dbFile, ipLocator);
