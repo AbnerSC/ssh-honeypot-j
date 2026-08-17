@@ -48,6 +48,7 @@ public class ApiController {
         app.get("/api/stats/trend", ctx -> ok(ctx, logs.trend(daysParam(ctx))));
         app.get("/api/stats/protocol", ctx -> ok(ctx, logs.protocolDist()));
         app.get("/api/stats/top-ips", ctx -> ok(ctx, logs.topIps(limitParam(ctx))));
+        app.get("/api/stats/top-locations", ctx -> ok(ctx, logs.topLocations(limitParam(ctx))));
         app.get("/api/stats/top-usernames", ctx -> ok(ctx, logs.topUsernames(limitParam(ctx))));
         app.get("/api/stats/top-passwords", ctx -> ok(ctx, logs.topPasswords(limitParam(ctx))));
 

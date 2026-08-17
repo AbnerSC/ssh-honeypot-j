@@ -126,16 +126,18 @@ async function viewDashboard(el) {
             <div class="panel"><h3>协议分布（会话）</h3><div id="chart-proto" class="chart"></div></div>
             <div class="panel"><h3>攻击源 IP TOP10</h3><div id="chart-ips" class="chart"></div></div>
         </div>
+        <div class="panel"><h3>攻击源地区 TOP10</h3><div id="chart-locs" class="chart"></div></div>
         <div class="grid-2">
             <div class="panel"><h3>高频爆破用户名 TOP10</h3><div id="chart-users" class="chart"></div></div>
             <div class="panel"><h3>高频尝试口令 TOP10</h3><div id="chart-pwds" class="chart"></div></div>
         </div>`;
     try {
-        const [ov, trend, proto, ips, users, pwds] = await Promise.all([
+        const [ov, trend, proto, ips, locs, users, pwds] = await Promise.all([
             API.get('/api/stats/overview'),
             API.get('/api/stats/trend?days=14'),
             API.get('/api/stats/protocol'),
             API.get('/api/stats/top-ips?limit=10'),
+            API.get('/api/stats/top-locations?limit=10'),
             API.get('/api/stats/top-usernames?limit=10'),
             API.get('/api/stats/top-passwords?limit=10')
         ]);
@@ -149,6 +151,7 @@ async function viewDashboard(el) {
         renderTrend(trend.data);
         renderPie(proto.data);
         barChart('chart-ips', ips.data, '登录尝试次数');
+        renderLocs(locs.data);
         barChart('chart-users', users.data, '尝试次数');
         barChart('chart-pwds', pwds.data, '尝试次数');
     } catch (e) {
@@ -210,6 +213,22 @@ function barChart(id, rows, name) {
             axisLine: { lineStyle: { color: '#1e2b45' } }
         },
         series: [{ name, type: 'bar', data: sorted.map((r) => r.value), barMaxWidth: 16 }]
+    });
+}
+
+// 地区排行：竖向柱状图，横轴为地区（国内省份 / 国外国家），纵轴为统计数量
+function renderLocs(rows) {
+    newChart('chart-locs').setOption({
+        color: ['#34d399'],
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: 50, right: 20, top: 15, bottom: 30 },
+        xAxis: {
+            type: 'category', data: rows.map((r) => r.name),
+            axisLabel: { color: '#8aa0bf', interval: 0, rotate: rows.length > 6 ? 30 : 0 },
+            axisLine: { lineStyle: { color: '#1e2b45' } }
+        },
+        yAxis: { type: 'value', ...AXIS },
+        series: [{ name: '登录尝试次数', type: 'bar', data: rows.map((r) => r.value), barMaxWidth: 28 }]
     });
 }
 

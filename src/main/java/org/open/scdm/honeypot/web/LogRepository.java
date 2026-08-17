@@ -101,6 +101,32 @@ public class LogRepository implements AutoCloseable {
         return listLimit("SELECT src_ip AS name, COUNT(*) AS value FROM auth_attempts GROUP BY src_ip ORDER BY value DESC LIMIT ?", limit);
     }
 
+    /** 攻击源地区排行（按登录尝试次数，国内按省份、国外按国家聚合，空值归入“未知”） */
+    public List<Map<String, Object>> topLocations(int limit) throws SQLException {
+        Map<String, Long> byRegion = new LinkedHashMap<>();
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(
+                "SELECT location, COUNT(*) FROM auth_attempts GROUP BY location")) {
+            while (rs.next()) {
+                byRegion.merge(regionOf(rs.getString(1)), rs.getLong(2), Long::sum);
+            }
+        }
+        return byRegion.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(limit)
+                .map(e -> Map.<String, Object>of("name", e.getKey(), "value", e.getValue()))
+                .toList();
+    }
+
+    /** location（国家 省份 城市）取地区名：国内取省份，国外取国家；非地域值（如内网IP）原样返回；空值返回“未知” */
+    private static String regionOf(String location) {
+        if (location == null || location.isBlank()) return "未知";
+        String[] parts = location.trim().split("\\s+");
+        if ("中国".equals(parts[0])) {
+            return parts.length >= 2 ? parts[1] : parts[0]; // 国内按省份统计
+        }
+        return parts[0]; // 国外按国家统计
+    }
+
     /** 被爆破用户名排行 */
     public List<Map<String, Object>> topUsernames(int limit) throws SQLException {
         return listLimit("SELECT username AS name, COUNT(*) AS value FROM auth_attempts GROUP BY username ORDER BY value DESC LIMIT ?", limit);
