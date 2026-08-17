@@ -56,13 +56,6 @@
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>
             <version>7.2.3</version>
-            <exclusions>
-                <!-- 项目已绑定 slf4j-jdk14，排除 optional 的 slf4j-simple 避免多绑定 -->
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-simple</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>

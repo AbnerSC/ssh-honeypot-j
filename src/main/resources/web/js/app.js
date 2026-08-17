@@ -411,7 +411,7 @@ function openPwdModal(forced) {
             CURRENT_USER.mustChange = false;
             showModal('pwd-modal', false);
             toast('密码修改成功');
-            render();
+            location.reload(); // 整页刷新重拉 /api/me，确保改密后状态与服务端一致
         } catch (e) {
             errEl.textContent = e.message;
         }

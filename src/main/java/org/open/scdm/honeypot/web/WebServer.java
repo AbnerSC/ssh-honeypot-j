@@ -5,6 +5,7 @@ import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.http.HttpResponseException;
 import io.javalin.http.UnauthorizedResponse;
+import io.javalin.http.staticfiles.Location;
 import io.javalin.json.JsonMapper;
 import io.javalin.router.JavalinDefaultRoutingApi;
 
@@ -58,7 +59,13 @@ public class WebServer implements AutoCloseable {
         Gson gson = new Gson();
         // Javalin 7：路由/前置拦截/异常处理器必须在创建时（config.routes）前置注册
         this.app = Javalin.create(config -> {
-            config.staticFiles.add("/web");       // 前端页面（随 jar 打包）
+            // 前端页面（随 jar 打包）；HTML/JS/CSS 禁用缓存，确保升级与改密等
+            // 状态变更后浏览器始终加载最新版本，不会因旧缓存导致界面状态不一致
+            config.staticFiles.add(sf -> {
+                sf.directory = "/web";
+                sf.location = Location.CLASSPATH;
+                sf.headers = Map.of("Cache-Control", "no-cache, no-store, must-revalidate");
+            });
             config.jsonMapper(new JsonMapper() {  // JSON 序列化统一走 Gson
                 @Override
                 public String toJsonString(Object obj, Type type) {

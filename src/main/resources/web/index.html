@@ -34,8 +34,8 @@
     </div>
 </div>
 
-<!-- 修改密码弹窗 -->
-<div class="modal-mask" id="pwd-modal">
+<!-- 修改密码弹窗（初始必须带 hide 类，否则页面加载即显示且按钮未绑定事件） -->
+<div class="modal-mask hide" id="pwd-modal">
     <div class="modal">
         <div class="modal-head" id="pwd-modal-title">修改密码</div>
         <div class="field"><label>原密码</label><input id="pwd-old" type="password" autocomplete="current-password"></div>
