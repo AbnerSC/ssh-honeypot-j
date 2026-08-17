@@ -523,6 +523,7 @@ const VIEWS = {
         cols: [
             { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts) },
             { key: 'src_ip', label: '来源 IP', cls: 'mono' },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
             { key: 'protocol', label: '协议', render: protoCell },
             { key: 'username', label: '用户名', cls: 'mono' },
             { key: 'password', label: '密码', cls: 'mono cell', title: true },
@@ -541,6 +542,7 @@ const VIEWS = {
         cols: [
             { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts) },
             { key: 'src_ip', label: '来源 IP', cls: 'mono' },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
             { key: 'username', label: '用户名', cls: 'mono' },
             { key: 'command', label: '命令', cls: 'mono cell', title: true },
             { key: 'session_id', label: '会话', cls: 'mono' }
@@ -553,6 +555,7 @@ const VIEWS = {
         cols: [
             { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts) },
             { key: 'src_ip', label: '来源 IP', cls: 'mono' },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
             { key: 'username', label: '用户名', cls: 'mono' },
             { key: 'url', label: '恶意 URL', cls: 'mono cell', title: true }
         ]
@@ -564,6 +567,7 @@ const VIEWS = {
         cols: [
             { key: 'ts', label: '锁定时间', render: (r) => fmtTs(r.ts) },
             { key: 'src_ip', label: '来源 IP', cls: 'mono' },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
             { key: 'locked_until', label: '解除时间', render: (r) => fmtTs(r.locked_until) },
             { key: 'lockedActive', label: '状态', render: (r) => r.lockedActive ? '<span class="tag red">锁定中</span>' : '<span class="tag gray">已解除</span>' }
         ]

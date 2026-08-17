@@ -79,7 +79,7 @@ public class AttackLogger implements AutoCloseable {
 
     public void sessionOpen(String sessionId, String protocol, String ip, int port) {
         // 归属地在会话线程同步解析：xdb 全内存检索微秒级，另有进程内缓存
-        String location = (ipLocator == null) ? null : ipLocator.locate(ip);
+        String location = locate(ip);
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("event", "session_open");
         fields.put("session", sessionId);
@@ -92,10 +92,18 @@ public class AttackLogger implements AutoCloseable {
 
     public void authAttempt(String sessionId, String protocol, String ip,
                             String username, String password, boolean success) {
-        write(Map.of("event", "auth_attempt", "session", sessionId, "protocol", protocol,
-                "src_ip", ip, "username", username, "password", password,
-                "success", String.valueOf(success)),
-                (store, ts) -> store.recordAuthAttempt(ts, sessionId, protocol, ip, username, password, success));
+        String location = locate(ip);
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("event", "auth_attempt");
+        fields.put("session", sessionId);
+        fields.put("protocol", protocol);
+        fields.put("src_ip", ip);
+        fields.put("username", username);
+        fields.put("password", password);
+        fields.put("success", String.valueOf(success));
+        if (location != null) fields.put("location", location);
+        write(fields,
+                (store, ts) -> store.recordAuthAttempt(ts, sessionId, protocol, ip, username, password, success, location));
         System.out.printf("[%s] [%s] 登录尝试 %s 用户=%s 密码=%s -> %s%n",
                 LocalDateTime.now().format(TS), protocol, ip, username, password,
                 success ? "放行(蜜罐)" : "拒绝");
@@ -104,30 +112,57 @@ public class AttackLogger implements AutoCloseable {
     public void ipLocked(String ip, long untilMillis) {
         String until = LocalDateTime.ofInstant(Instant.ofEpochMilli(untilMillis), ZoneId.systemDefault())
                 .format(TS);
-        write(Map.of("event", "ip_locked", "src_ip", ip, "until", until),
-                (store, ts) -> store.recordIpLocked(ts, ip, untilMillis));
+        String location = locate(ip);
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("event", "ip_locked");
+        fields.put("src_ip", ip);
+        fields.put("until", until);
+        if (location != null) fields.put("location", location);
+        write(fields, (store, ts) -> store.recordIpLocked(ts, ip, untilMillis, location));
         System.out.printf("[%s] 源 IP %s 连续登录失败已达上限，锁定至 %s%n",
                 LocalDateTime.now().format(TS), ip, until);
     }
 
     public void command(String sessionId, String ip, String username, String cmdline) {
-        write(Map.of("event", "command", "session", sessionId,
-                "src_ip", ip, "username", username, "command", cmdline),
-                (store, ts) -> store.recordCommand(ts, sessionId, ip, username, cmdline));
+        String location = locate(ip);
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("event", "command");
+        fields.put("session", sessionId);
+        fields.put("src_ip", ip);
+        fields.put("username", username);
+        fields.put("command", cmdline);
+        if (location != null) fields.put("location", location);
+        write(fields, (store, ts) -> store.recordCommand(ts, sessionId, ip, username, cmdline, location));
         System.out.printf("[%s] [%s] %s$ %s%n", LocalDateTime.now().format(TS), ip, username, cmdline);
     }
 
     public void download(String sessionId, String ip, String username, String url) {
-        write(Map.of("event", "download", "session", sessionId,
-                "src_ip", ip, "username", username, "url", url),
-                (store, ts) -> store.recordDownload(ts, sessionId, ip, username, url));
+        String location = locate(ip);
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("event", "download");
+        fields.put("session", sessionId);
+        fields.put("src_ip", ip);
+        fields.put("username", username);
+        fields.put("url", url);
+        if (location != null) fields.put("location", location);
+        write(fields, (store, ts) -> store.recordDownload(ts, sessionId, ip, username, url, location));
         System.out.printf("[%s] [%s] 恶意下载: %s%n", LocalDateTime.now().format(TS), ip, url);
     }
 
     public void sessionClose(String sessionId, String ip, long durationMs) {
-        write(Map.of("event", "session_close", "session", sessionId,
-                "src_ip", ip, "duration_ms", String.valueOf(durationMs)),
-                (store, ts) -> store.recordSessionClose(ts, sessionId, durationMs));
+        String location = locate(ip);
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("event", "session_close");
+        fields.put("session", sessionId);
+        fields.put("src_ip", ip);
+        fields.put("duration_ms", String.valueOf(durationMs));
+        if (location != null) fields.put("location", location);
+        write(fields, (store, ts) -> store.recordSessionClose(ts, sessionId, durationMs));
+    }
+
+    /** 解析来源 IP 归属地；定位器不可用时返回 null（JSONL 不输出该字段，SQLite 存 NULL） */
+    private String locate(String ip) {
+        return (ipLocator == null) ? null : ipLocator.locate(ip);
     }
 
     private void write(Map<String, String> fields, DbSink dbSink) {

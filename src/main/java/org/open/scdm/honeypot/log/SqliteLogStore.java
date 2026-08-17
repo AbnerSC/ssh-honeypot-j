@@ -26,6 +26,7 @@ import java.time.format.DateTimeFormatter;
  *   <li>download      -> downloads</li>
  *   <li>ip_locked     -> ip_locks</li>
  * </ul>
+ * user_version 3 起，所有含来源 IP 的事件表均带 location 归属地列。
  * 线程安全说明：所有写入均由 AttackLogger 的单线程异步写入器串行调用，
  * 共享单个 Connection 是安全的；WAL 模式允许 Web 端并发只读而不阻塞写入。
  */
@@ -60,7 +61,8 @@ public class SqliteLogStore implements AutoCloseable {
                 src_ip      TEXT    NOT NULL,              -- 攻击者来源 IP
                 username    TEXT    NOT NULL,              -- 尝试登录的用户名
                 password    TEXT    NOT NULL,              -- 尝试登录的口令
-                success     INTEGER NOT NULL CHECK (success IN (0, 1))  -- 是否登录成功(蜜罐放行)
+                success     INTEGER NOT NULL CHECK (success IN (0, 1)),  -- 是否登录成功(蜜罐放行)
+                location    TEXT                           -- 来源 IP 归属地（国家 省份 城市，ip2region 库解析）
             )""",
             "CREATE INDEX IF NOT EXISTS idx_auth_src_ip ON auth_attempts(src_ip)",
             "CREATE INDEX IF NOT EXISTS idx_auth_username ON auth_attempts(username)",
@@ -73,7 +75,8 @@ public class SqliteLogStore implements AutoCloseable {
                 session_id  TEXT,
                 src_ip      TEXT    NOT NULL,
                 username    TEXT,
-                command     TEXT    NOT NULL               -- 执行的完整命令行
+                command     TEXT    NOT NULL,              -- 执行的完整命令行
+                location    TEXT                           -- 来源 IP 归属地（国家 省份 城市，ip2region 库解析）
             )""",
             "CREATE INDEX IF NOT EXISTS idx_commands_session ON commands(session_id)",
             "CREATE INDEX IF NOT EXISTS idx_commands_src_ip ON commands(src_ip)",
@@ -86,7 +89,8 @@ public class SqliteLogStore implements AutoCloseable {
                 session_id  TEXT,
                 src_ip      TEXT    NOT NULL,
                 username    TEXT,
-                url         TEXT    NOT NULL               -- 恶意下载 URL
+                url         TEXT    NOT NULL,              -- 恶意下载 URL
+                location    TEXT                           -- 来源 IP 归属地（国家 省份 城市，ip2region 库解析）
             )""",
             "CREATE INDEX IF NOT EXISTS idx_downloads_src_ip ON downloads(src_ip)",
             "CREATE INDEX IF NOT EXISTS idx_downloads_ts ON downloads(ts_epoch_ms)",
@@ -96,7 +100,8 @@ public class SqliteLogStore implements AutoCloseable {
                 ts           TEXT    NOT NULL,
                 ts_epoch_ms  INTEGER NOT NULL,
                 src_ip       TEXT    NOT NULL,             -- 被锁定的源 IP
-                locked_until TEXT    NOT NULL              -- 锁定解除时间
+                locked_until TEXT    NOT NULL,             -- 锁定解除时间
+                location     TEXT                          -- 来源 IP 归属地（国家 省份 城市，ip2region 库解析）
             )""",
             "CREATE INDEX IF NOT EXISTS idx_ip_locks_src_ip ON ip_locks(src_ip)",
             "CREATE INDEX IF NOT EXISTS idx_ip_locks_ts ON ip_locks(ts_epoch_ms)"
@@ -124,6 +129,7 @@ public class SqliteLogStore implements AutoCloseable {
                 st.execute(ddl);
             }
             // 版本迁移（user_version < 2 的旧库）：sessions 补加 location 列；
+            // （user_version < 3 的旧库）：其余含来源 IP 的事件表补加 location 列。
             // 新建库的 DDL 已含该列，重复 ALTER 报错时忽略即可
             int version = 0;
             try (var rs = st.executeQuery("PRAGMA user_version")) {
@@ -136,20 +142,29 @@ public class SqliteLogStore implements AutoCloseable {
                     // 列已存在（新建库）
                 }
             }
-            st.execute("PRAGMA user_version=2");
+            if (version < 3) {
+                for (String table : new String[]{"auth_attempts", "commands", "downloads", "ip_locks"}) {
+                    try {
+                        st.execute("ALTER TABLE " + table + " ADD COLUMN location TEXT");
+                    } catch (SQLException ignored) {
+                        // 列已存在（新建库）
+                    }
+                }
+            }
+            st.execute("PRAGMA user_version=3");
         }
         insertSession = conn.prepareStatement(
                 "INSERT INTO sessions(session_id, protocol, src_ip, src_port, opened_at, opened_epoch_ms, location) VALUES(?,?,?,?,?,?,?)");
         closeSession = conn.prepareStatement(
                 "UPDATE sessions SET closed_at = ?, duration_ms = ? WHERE session_id = ?");
         insertAuth = conn.prepareStatement(
-                "INSERT INTO auth_attempts(ts, ts_epoch_ms, session_id, protocol, src_ip, username, password, success) VALUES(?,?,?,?,?,?,?,?)");
+                "INSERT INTO auth_attempts(ts, ts_epoch_ms, session_id, protocol, src_ip, username, password, success, location) VALUES(?,?,?,?,?,?,?,?,?)");
         insertCommand = conn.prepareStatement(
-                "INSERT INTO commands(ts, ts_epoch_ms, session_id, src_ip, username, command) VALUES(?,?,?,?,?,?)");
+                "INSERT INTO commands(ts, ts_epoch_ms, session_id, src_ip, username, command, location) VALUES(?,?,?,?,?,?,?)");
         insertDownload = conn.prepareStatement(
-                "INSERT INTO downloads(ts, ts_epoch_ms, session_id, src_ip, username, url) VALUES(?,?,?,?,?,?)");
+                "INSERT INTO downloads(ts, ts_epoch_ms, session_id, src_ip, username, url, location) VALUES(?,?,?,?,?,?,?)");
         insertIpLock = conn.prepareStatement(
-                "INSERT INTO ip_locks(ts, ts_epoch_ms, src_ip, locked_until) VALUES(?,?,?,?)");
+                "INSERT INTO ip_locks(ts, ts_epoch_ms, src_ip, locked_until, location) VALUES(?,?,?,?,?)");
     }
 
     public void recordSessionOpen(LocalDateTime ts, String sessionId, String protocol,
@@ -172,7 +187,8 @@ public class SqliteLogStore implements AutoCloseable {
     }
 
     public void recordAuthAttempt(LocalDateTime ts, String sessionId, String protocol, String ip,
-                                  String username, String password, boolean success) throws SQLException {
+                                  String username, String password, boolean success,
+                                  String location) throws SQLException {
         insertAuth.setString(1, ts.format(TS));
         insertAuth.setLong(2, toEpochMs(ts));
         insertAuth.setString(3, sessionId);
@@ -181,38 +197,43 @@ public class SqliteLogStore implements AutoCloseable {
         insertAuth.setString(6, username);
         insertAuth.setString(7, password);
         insertAuth.setInt(8, success ? 1 : 0);
+        insertAuth.setString(9, location);
         insertAuth.executeUpdate();
     }
 
     public void recordCommand(LocalDateTime ts, String sessionId, String ip,
-                              String username, String cmdline) throws SQLException {
+                              String username, String cmdline, String location) throws SQLException {
         insertCommand.setString(1, ts.format(TS));
         insertCommand.setLong(2, toEpochMs(ts));
         insertCommand.setString(3, sessionId);
         insertCommand.setString(4, ip);
         insertCommand.setString(5, username);
         insertCommand.setString(6, cmdline);
+        insertCommand.setString(7, location);
         insertCommand.executeUpdate();
     }
 
     public void recordDownload(LocalDateTime ts, String sessionId, String ip,
-                               String username, String url) throws SQLException {
+                               String username, String url, String location) throws SQLException {
         insertDownload.setString(1, ts.format(TS));
         insertDownload.setLong(2, toEpochMs(ts));
         insertDownload.setString(3, sessionId);
         insertDownload.setString(4, ip);
         insertDownload.setString(5, username);
         insertDownload.setString(6, url);
+        insertDownload.setString(7, location);
         insertDownload.executeUpdate();
     }
 
-    public void recordIpLocked(LocalDateTime ts, String ip, long untilMillis) throws SQLException {
+    public void recordIpLocked(LocalDateTime ts, String ip, long untilMillis,
+                               String location) throws SQLException {
         String until = LocalDateTime.ofInstant(Instant.ofEpochMilli(untilMillis),
                 ZoneId.systemDefault()).format(TS);
         insertIpLock.setString(1, ts.format(TS));
         insertIpLock.setLong(2, toEpochMs(ts));
         insertIpLock.setString(3, ip);
         insertIpLock.setString(4, until);
+        insertIpLock.setString(5, location);
         insertIpLock.executeUpdate();
     }
 
