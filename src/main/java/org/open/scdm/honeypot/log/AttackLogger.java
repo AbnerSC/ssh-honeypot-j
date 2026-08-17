@@ -66,6 +66,11 @@ public class AttackLogger implements AutoCloseable {
         return "s" + sessionSeq.incrementAndGet() + "-" + Long.toHexString(System.currentTimeMillis());
     }
 
+    /** SQLite 存储是否初始化成功（Web 控制台依赖数据库，不可用时不启动） */
+    public boolean isDbHealthy() {
+        return db != null;
+    }
+
     public void sessionOpen(String sessionId, String protocol, String ip, int port) {
         write(Map.of("event", "session_open", "session", sessionId,
                 "protocol", protocol, "src_ip", ip, "src_port", String.valueOf(port)),

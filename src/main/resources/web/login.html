@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>登录 · 蜜罐监控中心</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background:
+                radial-gradient(1200px 600px at 80% -10%, rgba(34, 211, 238, .08), transparent),
+                radial-gradient(900px 500px at 10% 110%, rgba(52, 211, 153, .06), transparent),
+                var(--bg);
+        }
+        .login-card {
+            width: 380px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 36px 32px 28px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+        }
+        .login-logo {
+            text-align: center;
+            margin-bottom: 26px;
+        }
+        .login-logo .logo-mark {
+            font-size: 30px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 2px;
+            font-family: ui-monospace, Consolas, monospace;
+        }
+        .login-logo .logo-sub {
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--text2);
+            letter-spacing: 4px;
+        }
+        .login-tip {
+            margin-top: 18px;
+            font-size: 12px;
+            color: var(--text2);
+            text-align: center;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body>
+<div class="login-card">
+    <div class="login-logo">
+        <div class="logo-mark">HONEYPOT</div>
+        <div class="logo-sub">蜜 罐 监 控 中 心</div>
+    </div>
+    <form id="login-form">
+        <div class="field">
+            <label>用户名</label>
+            <input id="username" autocomplete="username" placeholder="请输入用户名" required>
+        </div>
+        <div class="field">
+            <label>密码</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="请输入密码" required>
+        </div>
+        <div id="login-error" class="form-error"></div>
+        <button class="btn primary block" type="submit" id="login-btn">登 录</button>
+    </form>
+    <div class="login-tip">仅授权安全运维人员可访问<br>所有登录行为均被记录</div>
+</div>
+<script src="/js/api.js"></script>
+<script>
+    if (location.hash === '#timeout') {
+        document.getElementById('login-error').textContent = '会话已过期，请重新登录';
+    }
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = document.getElementById('login-error');
+        const btn = document.getElementById('login-btn');
+        errEl.textContent = '';
+        btn.disabled = true;
+        try {
+            const r = await API.post('/api/login', {
+                username: document.getElementById('username').value.trim(),
+                password: document.getElementById('password').value
+            });
+            if (r.ok) {
+                location.href = '/';
+            } else {
+                errEl.textContent = r.error || '登录失败';
+            }
+        } catch (err) {
+            errEl.textContent = err.message;
+        } finally {
+            btn.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>

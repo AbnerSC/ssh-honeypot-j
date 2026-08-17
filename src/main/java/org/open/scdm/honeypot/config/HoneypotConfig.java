@@ -38,6 +38,9 @@ import java.util.Map;
  * log:
  *   file: logs/honeypot.jsonl
  *   db: logs/database.db
+ * web:
+ *   enabled: true
+ *   port: 8080
  * auth:
  *   maxFailures: 3
  *   windowMinutes: 5
@@ -63,6 +66,7 @@ public class HoneypotConfig {
     private Postgresql postgresql = new Postgresql();
     private Redis redis = new Redis();
     private Log log = new Log();
+    private Web web = new Web();
     private Auth auth = new Auth();
 
     public static class Ssh {
@@ -132,6 +136,21 @@ public class HoneypotConfig {
 
         public void setFile(String file) { this.file = file; }
         public void setDb(String db) { this.db = db; }
+    }
+
+    /** Web 可视化控制台：攻击日志统计/明细查询 + 系统用户管理，与蜜罐同进程同 jar 部署 */
+    public static class Web {
+        private boolean enabled = true;   // 是否启用 Web 控制台
+        private int port = 8080;          // Web 监听端口
+        private int sessionTimeoutMinutes = 30;  // 管理端登录会话超时（分钟）
+
+        public boolean isEnabled() { return enabled; }
+        public int getPort() { return port; }
+        public int getSessionTimeoutMinutes() { return sessionTimeoutMinutes; }
+
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public void setPort(int port) { this.port = port; }
+        public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) { this.sessionTimeoutMinutes = sessionTimeoutMinutes; }
     }
 
     /**
@@ -269,6 +288,7 @@ public class HoneypotConfig {
     public Postgresql getPostgresql() { return postgresql; }
     public Redis getRedis() { return redis; }
     public Log getLog() { return log; }
+    public Web getWeb() { return web; }
     public Auth getAuth() { return auth; }
 
     public void setHostname(String hostname) { this.hostname = hostname; }
@@ -278,5 +298,6 @@ public class HoneypotConfig {
     public void setPostgresql(Postgresql postgresql) { this.postgresql = postgresql; }
     public void setRedis(Redis redis) { this.redis = redis; }
     public void setLog(Log log) { this.log = log; }
+    public void setWeb(Web web) { this.web = web; }
     public void setAuth(Auth auth) { this.auth = auth; }
 }

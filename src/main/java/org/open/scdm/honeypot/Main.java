@@ -9,6 +9,7 @@ import org.open.scdm.honeypot.postgres.PostgresHoneypotServer;
 import org.open.scdm.honeypot.redis.RedisHoneypotServer;
 import org.open.scdm.honeypot.ssh.SshHoneypotServer;
 import org.open.scdm.honeypot.telnet.TelnetHoneypotServer;
+import org.open.scdm.honeypot.web.WebServer;
 
 import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
@@ -64,7 +65,7 @@ public class Main {
 
         System.out.println("""
                 ================================================
-                  SSH/Telnet/DB 蜜罐  v1.0.3  (Java 25)
+                  SSH/Telnet/DB 蜜罐  v1.1.0  (Java 25)
                   仅用于安全研究与授权环境，请勿用于非法用途
                 ================================================
                 """);
@@ -106,12 +107,24 @@ public class Main {
             redisServer.start();
         }
 
-        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, MySQL=%s, PostgreSQL=%s, Redis=%s, 主机名=%s, 日志=%s, 数据库=%s%n",
+        // Web 可视化控制台：与蜜罐同进程部署，只读查询 SQLite 攻击日志 + 系统用户管理
+        final WebServer[] webServer = {null};
+        var webCfg = config.getWeb();
+        if (webCfg.isEnabled()) {
+            if (attackLogger.isDbHealthy()) {
+                webServer[0] = WebServer.start(webCfg.getPort(), webCfg.getSessionTimeoutMinutes(), dbFile);
+            } else {
+                System.out.println("SQLite 数据库不可用，Web 控制台未启动。");
+            }
+        }
+
+        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, MySQL=%s, PostgreSQL=%s, Redis=%s, Web=%s, 主机名=%s, 日志=%s, 数据库=%s%n",
                 sshEnabled ? String.valueOf(config.getSsh().getPort()) : "关闭",
                 telnetEnabled ? String.valueOf(config.getTelnet().getPort()) : "关闭",
                 config.getMysql().isEnabled() ? String.valueOf(config.getMysql().getPort()) : "关闭",
                 config.getPostgresql().isEnabled() ? String.valueOf(config.getPostgresql().getPort()) : "关闭",
                 config.getRedis().isEnabled() ? String.valueOf(config.getRedis().getPort()) : "关闭",
+                webServer[0] != null ? String.valueOf(webCfg.getPort()) : "关闭",
                 hostname, logFile.toAbsolutePath(), dbFile.toAbsolutePath());
         System.out.println("按 Ctrl+C 停止。");
 
@@ -129,6 +142,7 @@ public class Main {
             if (finalMysql != null) finalMysql.stop();
             if (finalPostgres != null) finalPostgres.stop();
             if (finalRedis != null) finalRedis.stop();
+            try { if (webServer[0] != null) webServer[0].stop(); } catch (Exception ignored) {}
             try { attackLogger.close(); } catch (Exception ignored) {}
             shutdown.countDown();
         }, "honeypot-shutdown"));

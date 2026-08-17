@@ -18,8 +18,10 @@
   - 支持 `;`、`&&`、管道（取首命令）、`>` / `>>` 重定向（写入虚拟文件系统）
 - **虚拟文件系统**：含诱饵文件 `/etc/passwd`、`/etc/shadow`、`/root/.my.cnf`、
   `/root/.bash_history` 等，攻击者的增删改只发生在内存中
-- **攻击日志**：JSONL 格式（`logs/honeypot.jsonl`），记录来源 IP、登录凭证、
-  每条命令、恶意下载 URL、会话时长，可直接对接 ELK / jq 分析
+- **攻击日志**：JSONL 格式（`logs/honeypot.jsonl`）与 SQLite（`db/database.db`）双写，
+  记录来源 IP、登录凭证、每条命令、恶意下载 URL、会话时长，可直接对接 ELK / jq 分析
+- **Web 可视化控制台**：内置浏览器端管理界面（同进程部署，随 fat-jar 一起打包），
+  提供攻击日志统计图表、明细查询与系统用户管理，详见下文
 - **exec 通道支持**：记录 `ssh user@host "cmd"` 形式的非交互攻击
 
 ## 构建
@@ -56,9 +58,15 @@ telnet:
 
 log:
   file: logs/honeypot.jsonl   # 攻击日志文件路径
+  db: db/database.db          # SQLite 数据库文件（与 JSONL 双写同一份数据，供 Web 可视化）
+
+web:
+  enabled: true               # 是否启用 Web 控制台
+  port: 8080                  # Web 监听端口
+  sessionTimeoutMinutes: 30   # 管理端登录会话超时（分钟）
 ```
 
-配置文件不存在时使用内置默认值（SSH:2222、Telnet:2323、日志 logs/honeypot.jsonl）。
+配置文件不存在时使用内置默认值（SSH:2222、Telnet:2323、日志 logs/honeypot.jsonl、Web:8080）。
 
 ### 账号配置多密码
 
@@ -86,6 +94,28 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
 
 注意先把真实 sshd 移到别的端口，避免把自己锁在门外。
 
+## Web 可视化控制台
+
+与蜜罐同进程部署，前端页面与接口随 fat-jar 一起打包，无需额外服务。启动后访问
+`http://<主机IP>:8080/` 即可。
+
+**功能：**
+
+- **攻击日志统计**：总览指标（会话数、登录尝试、命令数、攻击 IP 数）、近 N 天趋势、
+  协议分布、Top 攻击 IP / 用户名 / 口令（ECharts 图表）
+- **明细查询**：会话、登录尝试、命令、恶意下载、IP 锁定五类事件的分页查询，
+  支持按来源 IP / 用户名 / 协议 / 关键字 / 时间范围过滤
+- **系统用户管理**：管理员可创建 / 禁用 / 删除账号、重置口令
+
+**登录与安全：**
+
+- 首次启动自动创建默认管理员 `admin/admin123`，登录后强制修改密码
+- 口令以 PBKDF2-HMAC-SHA256 加盐哈希存储；登录态由服务端 Session（HttpOnly Cookie）承载
+- 连续 5 次登录失败锁定来源 IP 15 分钟；会话默认 30 分钟超时
+- 双角色：`admin`（全部权限）与 `viewer`（仅查看日志统计与明细）
+
+> 建议：8080 端口仅对运维网段开放，不要将管理控制台直接暴露到公网。
+
 ## Docker 部署
 
 镜像基于 JDK 25 运行时构建，开箱即用。
@@ -102,28 +132,33 @@ services:
     restart: always
     volumes:
       - ${PWD}/logs:/app/logs
+      - ${PWD}/db:/app/db
     environment:
       - TZ=Asia/Shanghai
     ports:
       - 2222:2222
       - 2323:2323
-    mem_limit: 256m
+      - 8080:8080   # Web 控制台，按需开放
+    mem_limit: 512m
 ```
 
 启动：
 
 ```bash
-mkdir logs
+mkdir logs db
 docker compose up -d
 ```
 
 - `${PWD}/logs` 为宿主机日志目录，攻击日志实时写入 `./logs/honeypot.jsonl`
-- `mem_limit: 256m` 限制容器内存，避免海量会话拖垮宿主机
+- `${PWD}/db` 持久化 SQLite 数据库（攻击日志与系统用户），重建容器不丢数据
+- `mem_limit: 512m` 限制容器内存，避免海量会话拖垮宿主机
+- 蜜罐服务端口（3306/5432/6379）同样在容器内监听，需要诱捕数据库端口时自行追加映射
 - 如需自定义配置，可将 `config.yaml` 一并挂载：
 
   ```yaml
   volumes:
     - ${PWD}/logs:/app/logs
+    - ${PWD}/db:/app/db
     - ${PWD}/config.yaml:/app/config.yaml
   ```
 
@@ -163,7 +198,18 @@ src/main/java/com/honeypot/
 │   └── SessionState.java            # 会话状态（用户/目录/历史）
 ├── ssh/SshHoneypotServer.java        # SSH 服务（MINA SSHD）
 ├── telnet/TelnetHoneypotServer.java  # Telnet 服务（原生 Socket）
-└── log/AttackLogger.java             # JSONL 攻击日志
+├── mysql|postgres|redis/...          # 数据库协议蜜罐（连接即记录并拒绝）
+├── auth/CredentialGuard.java         # 蜜罐登录密码本校验与 IP 锁定
+├── log/
+│   ├── AttackLogger.java            # JSONL 攻击日志（单线程异步写）
+│   └── SqliteLogStore.java          # SQLite 结构化存储（与 JSONL 双写）
+└── web/                              # Web 可视化控制台（Javalin 内嵌）
+    ├── WebServer.java               # 服务器启动/静态资源/登录守卫
+    ├── ApiController.java           # REST API（统计/明细/用户管理）
+    ├── AuthService.java             # 登录校验与会话管理
+    ├── LogRepository.java           # 攻击日志查询（只读连接）
+    └── UserRepository.java          # 系统用户与 PBKDF2 口令
+src/main/resources/web/               # 前端静态页（登录页/主界面 SPA，随 jar 打包）
 config.yaml                              # 系统配置信息
 ```
 
@@ -181,6 +227,25 @@ config.yaml                              # 系统配置信息
 - [ ] 增加支持LLM，让大模型自动回应shell命令，让蜜罐表现更真实
 
 ## 版本历史
+
+### v1.1.0（2026-08-17）
+
+> 本期聚焦可观测性：攻击数据结构化落库，并提供内置 Web 可视化管理控制台。
+
+**新增**
+- **SQLite 双写存储**：攻击事件在 JSONL 之外同步写入 `db/database.db`（WAL 模式，
+  蜜罐写入与 Web 查询互不阻塞），涵盖会话 / 登录尝试 / 命令 / 下载 / IP 锁定五类事件。
+- **Web 可视化控制台**：内嵌 Javalin（Jetty），前端静态页与 ECharts 随 fat-jar 一起打包，
+  离线可用；提供统计总览、趋势/协议/Top 榜单图表、五类事件明细分页过滤查询。
+- **系统用户管理**：admin / viewer 双角色，支持创建、禁用、删除账号与重置口令。
+- **登录安全**：PBKDF2-HMAC-SHA256 加盐哈希、服务端 Session（HttpOnly Cookie）、
+  首次登录强制改密、登录失败 IP 锁定、会话固定攻击防护。
+
+**依赖**
+- 新增 javalin `6.7.0`、gson `2.13.1`、echarts WebJar `5.5.1`；
+  sqlite-jdbc `3.53.2.1`（此前仅用于双写，本期启用 Web 查询）。
+
+---
 
 ### v1.0.3（2026-08-14）
 

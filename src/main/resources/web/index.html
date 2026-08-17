@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>蜜罐监控中心</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/api/vendor/echarts.js"></script>
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="logo">HONEYPOT<span>蜜罐监控中心</span></div>
+        <nav>
+            <a href="#dashboard" class="active">📊 攻击总览</a>
+            <a href="#sessions">🔗 会话记录</a>
+            <a href="#auth">🔑 登录尝试</a>
+            <a href="#commands">⌨️ 命令记录</a>
+            <a href="#downloads">⬇️ 恶意下载</a>
+            <a href="#locks">🔒 IP 锁定</a>
+            <a href="#users" class="admin-only">👥 用户管理</a>
+        </nav>
+        <div class="sidebar-foot" id="nav-user"></div>
+    </aside>
+    <div class="main">
+        <header class="topbar">
+            <h1 id="page-title">攻击总览</h1>
+            <div class="topbar-actions">
+                <button class="btn ghost" id="btn-pwd">修改密码</button>
+                <button class="btn ghost" id="btn-logout">退出登录</button>
+            </div>
+        </header>
+        <main id="content" class="content"></main>
+    </div>
+</div>
+
+<!-- 修改密码弹窗 -->
+<div class="modal-mask" id="pwd-modal">
+    <div class="modal">
+        <div class="modal-head" id="pwd-modal-title">修改密码</div>
+        <div class="field"><label>原密码</label><input id="pwd-old" type="password" autocomplete="current-password"></div>
+        <div class="field"><label>新密码</label><input id="pwd-new" type="password" autocomplete="new-password" placeholder="至少 8 位"></div>
+        <div class="field"><label>确认新密码</label><input id="pwd-new2" type="password" autocomplete="new-password"></div>
+        <div class="form-error" id="pwd-err"></div>
+        <div class="modal-actions">
+            <button class="btn" id="pwd-cancel">取消</button>
+            <button class="btn primary" id="pwd-ok">确定</button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

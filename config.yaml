@@ -30,6 +30,13 @@ log:
   file: logs/honeypot.jsonl   # 攻击日志文件路径
   db: db/database.db        # SQLite 数据库文件（与 JSONL 双写同一份数据，供 Web 可视化）
 
+# Web 可视化控制台：攻击日志统计与明细查询、系统用户管理（与蜜罐同进程部署）
+# 首次启动自动创建默认管理员 admin/admin123，登录后强制修改密码
+web:
+  enabled: true            # 是否启用 Web 控制台
+  port: 8080               # Web 监听端口
+  sessionTimeoutMinutes: 30  # 管理端登录会话超时（分钟）
+
 # 登录认证（密码本）配置：仅密码本内的 用户名/密码 允许登录
 # 每个账号可配置多个密码（列表形式），命中任意一个即视为登录成功；
 # 也兼容单个字符串写法，例如：admin: "admin123"
