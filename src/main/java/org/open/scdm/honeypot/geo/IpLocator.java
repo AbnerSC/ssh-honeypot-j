@@ -3,6 +3,7 @@ package org.open.scdm.honeypot.geo;
 import org.lionsoul.ip2region.service.Config;
 import org.lionsoul.ip2region.service.Ip2Region;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,8 +17,9 @@ import java.util.logging.Logger;
  * <p>
  * 库文件加载优先级：配置的外部文件路径 > jar 内置资源（db/ip2region_v4.xdb、db/ip2region_v6.xdb，
  * 随 fat-jar 打包，部署无需额外携带）；v4 / v6 两个库独立可选，仅单边可用时另一边查询返回 null；
- * 均采用 BufferCache 策略将库文件整体加载进内存（v4 约 11MB），查询为纯内存检索，
- * 无锁竞争、无磁盘 I/O，结果另加进程内缓存，同一 IP 仅首次查询命中 xdb。
+ * 均采用 VIndexCache 策略：仅向量索引（约 512KB/库）常驻内存，数据段按需从文件读取，
+ * 避免 37MB 级 v6 库整体进内存在低配额容器（Docker 默认堆约容器内存 1/4）中 OOM；
+ * 查询另有进程内结果缓存，同一 IP 仅首次查询触发文件检索。
  * <p>
  * 容错设计：库文件全部缺失或损坏时降级为空实现（locate 恒返回 null），
  * 不影响蜜罐与 Web 控制台的正常启动运行。
@@ -72,28 +74,56 @@ public class IpLocator implements AutoCloseable {
             LOG.info(tag + " IP 库文件不存在: " + xdbFile.toAbsolutePath() + "，回退使用 jar 内置库");
         }
         try {
-            // BufferCache：库文件整体进内存，纯内存检索，蜜罐低流量场景最优
-            var builder = Config.custom().setCachePolicy(Config.BufferCache);
+            // VIndexCache：仅向量索引（约 512KB/库）进内存，数据段按需读取；
+            // 避免 BufferCache 整体加载 37MB 级 v6 库导致低配额容器（Docker 默认堆约容器内存 1/4）OOM。
+            // 蜜罐低流量 + 下方进程内结果缓存，单次文件检索开销可忽略。
+            // 注意：ip2region 仅 BufferCache 支持 InputStream，故内置库需先释放为临时文件。
+            var builder = Config.custom().setCachePolicy(Config.VIndexCache);
             String source;
             if (external) {
                 builder.setXdbFile(xdbFile.toFile());
                 source = xdbFile.toAbsolutePath().toString();
             } else {
-                // 注意：ip2region 惰性读取该流，不可提前关闭，由 Ip2Region 服务持有至 close()
-                InputStream in = IpLocator.class.getResourceAsStream("/" + builtinResource);
-                if (in == null) {
+                Path tmp = extractBuiltin(builtinResource, tag);
+                if (tmp == null) {
                     LOG.warning(tag + " IP 库既无外部文件也无 jar 内置资源 " + builtinResource
                             + "，" + tag + " 归属地留空");
                     return null;
                 }
-                builder.setXdbInputStream(in);
-                source = "classpath:" + builtinResource;
+                builder.setXdbFile(tmp.toFile());
+                source = "classpath:" + builtinResource + "（已释放到 " + tmp + "）";
             }
             Config config = v4 ? builder.asV4() : builder.asV6();
             LOG.info(tag + " IP 归属地库已加载: " + source);
             return config;
         } catch (Exception e) {
             LOG.warning(tag + " IP 库文件加载失败，" + tag + " 归属地留空: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 将 jar 内置 xdb 库释放到临时文件（ip2region 仅 BufferCache 支持流式加载，
+     * VIndexCache 需要可随机读取的文件）；读取为瞬时占用，写入后字节数组即可回收。
+     *
+     * @return 临时文件路径（进程退出时自动删除）；内置资源不存在或释放失败时返回 null
+     */
+    private static Path extractBuiltin(String builtinResource, String tag) {
+        byte[] content;
+        try (InputStream in = IpLocator.class.getResourceAsStream("/" + builtinResource)) {
+            if (in == null) return null;
+            content = in.readAllBytes();
+        } catch (IOException e) {
+            LOG.warning(tag + " IP 内置库读取失败 " + builtinResource + ": " + e.getMessage());
+            return null;
+        }
+        try {
+            Path tmp = Files.createTempFile("ip2region-" + tag + "-", ".xdb");
+            tmp.toFile().deleteOnExit();
+            Files.write(tmp, content);
+            return tmp;
+        } catch (IOException e) {
+            LOG.warning(tag + " IP 内置库释放临时文件失败: " + e.getMessage());
             return null;
         }
     }
