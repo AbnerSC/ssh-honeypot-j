@@ -1,13 +1,11 @@
-# NetGazer 网络凝视者
-
-<p align="center">
+<div style="text-align: center;">
   <img src="docs/logo.svg" alt="NetGazer Logo" width="160"/>
-</p>
+</div>
 
-<p align="center">
-  <b>NetGazer 网络凝视者</b> —— 一款 ***中交互*** 多协议蜜罐，
-  静默凝视每一次针对服务器的暴力破解与入侵行为。
-</p>
+
+# NetGazer 网络凝视者
+一款 **中交互** 多协议蜜罐，静默凝视每一次针对服务器的暴力破解与入侵行为。
+
 
 基于 **Apache MINA SSHD** 实现 SSH 协议，原生 Socket 实现 Telnet 协议，
 内置伪装的 Ubuntu 22.04 虚拟文件系统与伪 Shell，
