@@ -1,8 +1,18 @@
-# SSH/Telnet 蜜罐 (Java 25)
+# NetGazer 网络凝视者
 
-一款 ***中交互*** 蜜罐，用于捕获针对服务器的 SSH/Telnet 暴力破解与入侵行为。
+<p align="center">
+  <img src="docs/logo.svg" alt="NetGazer Logo" width="160"/>
+</p>
+
+<p align="center">
+  <b>NetGazer 网络凝视者</b> —— 一款 ***中交互*** 多协议蜜罐，
+  静默凝视每一次针对服务器的暴力破解与入侵行为。
+</p>
+
 基于 **Apache MINA SSHD** 实现 SSH 协议，原生 Socket 实现 Telnet 协议，
-内置伪装的 Ubuntu 22.04 虚拟文件系统与伪 Shell。
+内置伪装的 Ubuntu 22.04 虚拟文件系统与伪 Shell，
+支持 SSH / Telnet / MySQL / PostgreSQL / Redis 多协议诱捕，
+并内置 Web 可视化控制台与攻击归属地分析。
 
 > ⚠️ 仅用于安全研究与授权环境。蜜罐会吸引真实攻击者，请务必在隔离的
 > 测试/专用机器上运行，不要部署在存有敏感数据的生产服务器上。

@@ -145,7 +145,7 @@ public class WebServer implements AutoCloseable {
         if (path.startsWith("/api/login")) return;
         boolean isApi = path.startsWith("/api/");
         boolean publicStatic = !isApi && (path.equals("/login.html")
-                || path.startsWith("/css/") || path.startsWith("/js/"));
+                || path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/img/"));
         if (isApi || !publicStatic) {
             if (AuthService.currentUser(ctx) == null) {
                 throw new UnauthorizedResponse("未登录或会话已过期");

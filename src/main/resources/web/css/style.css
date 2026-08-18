@@ -1,4 +1,4 @@
-/* 蜜罐监控中心：暗色安全运营风格 */
+/* NetGazer 网络凝视者：暗色安全运营风格 */
 :root {
     --bg: #0b1220;
     --panel: #101a2e;
@@ -36,20 +36,22 @@ input, select, button { font: inherit; }
     height: 100vh;
 }
 .logo {
-    padding: 20px 18px;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--accent);
+    padding: 16px 18px;
     border-bottom: 1px solid var(--border);
-    font-family: ui-monospace, Consolas, monospace;
+    text-align: center;
+}
+.logo img {
+    width: 48px;
+    height: 48px;
+    display: block;
+    margin: 0 auto 6px;
 }
 .logo span {
     display: block;
     font-size: 12px;
     color: var(--text2);
     font-weight: normal;
-    margin-top: 4px;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
 }
 .sidebar nav { padding: 12px 10px; flex: 1; }
 .sidebar nav a {

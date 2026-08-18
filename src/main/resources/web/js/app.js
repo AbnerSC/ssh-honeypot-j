@@ -1,4 +1,4 @@
-// 蜜罐监控中心 SPA：路由、仪表盘图表、明细查询表格、用户管理
+// NetGazer 网络凝视者 SPA：路由、仪表盘图表、明细查询表格、用户管理
 'use strict';
 
 let CURRENT_USER = null;

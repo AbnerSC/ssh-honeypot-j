@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>登录 · 蜜罐监控中心</title>
+    <title>登录 · NetGazer 网络凝视者</title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
         body {
@@ -28,8 +28,14 @@
             text-align: center;
             margin-bottom: 26px;
         }
+        .login-logo .logo-img {
+            width: 96px;
+            height: 96px;
+            margin: 0 auto 10px;
+            display: block;
+        }
         .login-logo .logo-mark {
-            font-size: 30px;
+            font-size: 24px;
             font-weight: 700;
             color: var(--accent);
             letter-spacing: 2px;
@@ -53,8 +59,9 @@
 <body>
 <div class="login-card">
     <div class="login-logo">
-        <div class="logo-mark">HONEYPOT</div>
-        <div class="logo-sub">蜜 罐 监 控 中 心</div>
+        <img class="logo-img" src="/img/logo.svg" alt="NetGazer">
+        <div class="logo-mark">NetGazer</div>
+        <div class="logo-sub">网络凝视者</div>
     </div>
     <form id="login-form">
         <div class="field">
