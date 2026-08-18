@@ -36,22 +36,35 @@ input, select, button { font: inherit; }
     height: 100vh;
 }
 .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 16px 18px;
     border-bottom: 1px solid var(--border);
-    text-align: center;
 }
 .logo img {
-    width: 48px;
-    height: 48px;
-    display: block;
-    margin: 0 auto 6px;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, .35));
 }
-.logo span {
-    display: block;
-    font-size: 12px;
+.logo-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+    min-width: 0;
+}
+.logo-text b {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: .5px;
+}
+.logo-text span {
+    font-size: 11px;
     color: var(--text2);
-    font-weight: normal;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
+    margin-top: 2px;
 }
 .sidebar nav { padding: 12px 10px; flex: 1; }
 .sidebar nav a {

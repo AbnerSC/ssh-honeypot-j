@@ -1,10 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
-      <stop offset="0%" stop-color="#16324f"/>
-      <stop offset="60%" stop-color="#0b1f33"/>
-      <stop offset="100%" stop-color="#06121f"/>
-    </radialGradient>
     <radialGradient id="iris" cx="45%" cy="40%" r="65%">
       <stop offset="0%" stop-color="#38bdf8"/>
       <stop offset="55%" stop-color="#0ea5e9"/>
@@ -19,7 +14,7 @@
       <stop offset="100%" stop-color="#2563eb"/>
     </linearGradient>
     <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feGaussianBlur stdDeviation="4" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
@@ -27,44 +22,31 @@
     </filter>
   </defs>
 
-  <!-- 背景 -->
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-
   <!-- 雷达扫描网格 -->
   <g stroke="#1e3a5f" stroke-width="1.5" fill="none" opacity="0.7">
-    <circle cx="256" cy="216" r="150"/>
-    <circle cx="256" cy="216" r="105"/>
-    <circle cx="256" cy="216" r="60"/>
-    <line x1="256" y1="56" x2="256" y2="376"/>
-    <line x1="96" y1="216" x2="416" y2="216"/>
-    <line x1="143" y1="103" x2="369" y2="329"/>
-    <line x1="369" y1="103" x2="143" y2="329"/>
+    <circle cx="60" cy="60" r="52"/>
+    <circle cx="60" cy="60" r="36"/>
+    <circle cx="60" cy="60" r="20"/>
+    <line x1="60" y1="8" x2="60" y2="112"/>
+    <line x1="8" y1="60" x2="112" y2="60"/>
+    <line x1="23" y1="23" x2="97" y2="97"/>
+    <line x1="97" y1="23" x2="23" y2="97"/>
   </g>
 
   <!-- 扫描扇形 -->
-  <path d="M256 216 L256 66 A150 150 0 0 1 368 110 Z" fill="#38bdf8" opacity="0.12"/>
+  <path d="M60 60 L60 8 A52 52 0 0 1 100 26 Z" fill="#38bdf8" opacity="0.14"/>
 
   <!-- 眼睛 -->
   <g filter="url(#glow)">
-    <!-- 眼眶 -->
-    <path d="M96 216 Q256 86 416 216 Q256 346 96 216 Z" fill="#0c2a45" stroke="url(#ring)" stroke-width="10" stroke-linejoin="round"/>
-    <!-- 虹膜 -->
-    <circle cx="256" cy="216" r="72" fill="url(#iris)"/>
-    <!-- 虹膜纹理 -->
-    <g stroke="#bae6fd" stroke-width="2" opacity="0.55" fill="none">
-      <circle cx="256" cy="216" r="56"/>
-      <circle cx="256" cy="216" r="40"/>
+    <path d="M16 60 Q60 20 104 60 Q60 100 16 60 Z" fill="#0c2a45" stroke="url(#ring)" stroke-width="3.5" stroke-linejoin="round"/>
+    <circle cx="60" cy="60" r="25" fill="url(#iris)"/>
+    <g stroke="#bae6fd" stroke-width="1.2" opacity="0.55" fill="none">
+      <circle cx="60" cy="60" r="19"/>
+      <circle cx="60" cy="60" r="13"/>
     </g>
-    <!-- 瞳孔 -->
-    <circle cx="256" cy="216" r="30" fill="url(#pupil)"/>
-    <!-- 瞳孔内雷达点 -->
-    <circle cx="256" cy="216" r="6" fill="#7dd3fc"/>
-    <!-- 高光 -->
-    <circle cx="238" cy="196" r="10" fill="#ffffff" opacity="0.85"/>
-    <circle cx="274" cy="236" r="5" fill="#ffffff" opacity="0.5"/>
+    <circle cx="60" cy="60" r="10.5" fill="url(#pupil)"/>
+    <circle cx="60" cy="60" r="2.2" fill="#7dd3fc"/>
+    <circle cx="54" cy="54" r="3.5" fill="#ffffff" opacity="0.85"/>
+    <circle cx="66" cy="66" r="1.8" fill="#ffffff" opacity="0.5"/>
   </g>
-
-  <!-- 下方文字 -->
-  <text x="256" y="432" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="52" font-weight="700" fill="#e0f2fe" letter-spacing="4">NetGazer</text>
-  <text x="256" y="478" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="26" fill="#7dd3fc" letter-spacing="10">网络凝视者</text>
 </svg>
