@@ -178,7 +178,7 @@ public class WebServer implements AutoCloseable {
 
         auditRepo.record(
                 username,
-                ctx.ip(),
+                ClientIps.resolve(ctx),
                 ctx.method().name(),
                 path,
                 ctx.queryString(),

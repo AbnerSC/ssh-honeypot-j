@@ -98,7 +98,7 @@ public class ApiController {
         String username = str(body.get("username"));
         String password = str(body.get("password"));
         if (username.isEmpty() || password.isEmpty()) throw new BadRequestResponse("请输入用户名和密码");
-        Map<String, Object> result = auth.login(ctx.ip(), username, password);
+        Map<String, Object> result = auth.login(ClientIps.resolve(ctx), username, password);
         if (Boolean.TRUE.equals(result.get("ok"))) {
             @SuppressWarnings("unchecked")
             Map<String, Object> user = (Map<String, Object>) result.get("user");
