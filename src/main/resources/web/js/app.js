@@ -177,7 +177,7 @@ function renderTrend(rows) {
         color: PALETTE,
         tooltip: { trigger: 'axis' },
         legend: { textStyle: { color: '#8aa0bf' } },
-        grid: { left: 50, right: 20, top: 40, bottom: 30 },
+        grid: { left: 50, right: 20, top: 40, bottom: 70 },
         xAxis: { type: 'category', data: rows.map((r) => r.day.slice(5)), ...AXIS },
         yAxis: { type: 'value', ...AXIS },
         series: [
