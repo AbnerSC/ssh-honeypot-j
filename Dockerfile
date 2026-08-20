@@ -18,6 +18,8 @@
 
 # ---------- 阶段一：Maven 编译打包 ----------
 ARG MAVEN_IMAGE=maven:3-eclipse-temurin-25
+# 运行时基础镜像：必须声明在第一个 FROM 之前（全局 ARG），否则后续 FROM 无法引用
+ARG BASE_IMAGE=openjdk:25-ea-oracle
 FROM --platform=$BUILDPLATFORM ${MAVEN_IMAGE} AS build
 WORKDIR /build
 
@@ -37,7 +39,6 @@ COPY src ./src
 RUN mvn -B -DskipTests clean package
 
 # ---------- 阶段二：运行时镜像 ----------
-ARG BASE_IMAGE=openjdk:25-ea-oracle
 FROM ${BASE_IMAGE}
 WORKDIR /app
 
