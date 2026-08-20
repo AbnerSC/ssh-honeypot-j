@@ -20,7 +20,7 @@ on:
 
 env:
   IMAGE_NAME: ssh-honeypot-j
-  IMAGE_USERNAME: scdm
+  IMAGE_USERNAME: babyfly
 
 jobs:
   build-and-push:
