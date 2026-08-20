@@ -1,0 +1,16 @@
+# 构建上下文排除项：减小上下文体积、避免本地运行产物进入镜像
+.git
+.github
+.idea
+.workbuddy
+target/
+logs/
+db/
+docs/
+*.iml
+*.class
+*.ser
+dependency-reduced-pom.xml
+.gitignore
+LICENSE
+README.md
