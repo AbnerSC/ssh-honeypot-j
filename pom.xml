@@ -14,8 +14,8 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- ============ Docker 镜像配置 ============ -->
-        <!-- 基础镜像（若本地无该镜像且需从 Nexus 拉取，可用 -Ddocker.baseImage=repo.pi.mmxx.fun/docker-releases-amd64/openjdk:25-ea-oracle 覆盖） -->
-        <docker.baseImage>openjdk:25-ea-oracle</docker.baseImage>
+        <!-- 基础镜像 -->
+        <docker.baseImage>eclipse-temurin:25-jdk-noble</docker.baseImage>
         <!-- Nexus Docker 仓库（host/repository 形式） -->
         <docker.registry>repo.pi.mmxx.fun/docker-releases-amd64/scdm</docker.registry>
         <docker.image>${docker.registry}/${project.artifactId}:${project.version}</docker.image>
