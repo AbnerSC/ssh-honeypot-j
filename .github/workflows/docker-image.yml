@@ -20,6 +20,7 @@ on:
 
 env:
   IMAGE_NAME: ssh-honeypot-j
+  IMAGE_USERNAME: scdm
 
 jobs:
   build-and-push:
@@ -47,7 +48,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_USERNAME }}/${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
           tags: |
