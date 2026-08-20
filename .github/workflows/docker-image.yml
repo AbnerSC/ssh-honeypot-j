@@ -2,7 +2,8 @@
 # Docker 多架构镜像自动构建发布（linux/amd64 + linux/arm64）
 #
 # 触发方式：
-#   - 推送 v 开头的 tag（如 v1.1.2）自动构建，推送 版本号 + latest 标签
+#   - 推送 release-v 开头的 tag（如 release-v1.2.3）自动构建，
+#     推送 版本号（1.2.3）+ latest 标签
 #   - 支持在 Actions 页面手动触发（仅推送 latest）
 #
 # 推送目标：
@@ -15,7 +16,7 @@ name: Docker 多架构镜像构建
 on:
   push:
     tags:
-      - 'v*'
+      - 'release-v*'
   workflow_dispatch:
 
 env:
@@ -30,6 +31,21 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
+      # 从 tag 解析版本号：release-v1.2.3 -> 1.2.3（手动触发时无版本号，仅推 latest）
+      - name: 解析版本号
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME#release-v}"
+            if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Tag 格式必须为 release-vX.Y.Z，实际为：${GITHUB_REF_NAME}"
+              exit 1
+            fi
+            echo "version=$TAG" >> "$GITHUB_OUTPUT"
+            echo "解析出版本号：$TAG"
+          fi
+
       # arm64 跨架构构建需要 QEMU 模拟（运行阶段 FROM 目标架构基础镜像）
       - name: 设置 QEMU
         uses: docker/setup-qemu-action@v3
@@ -43,7 +59,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # tag 推送：v1.1.2、1.1.2、latest；手动触发：仅 latest
+      # tag 推送：1.2.3、latest；手动触发：仅 latest
       - name: 生成镜像标签与元数据
         id: meta
         uses: docker/metadata-action@v5
@@ -52,8 +68,7 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.version != '' }}
             type=raw,value=latest
 
       - name: 构建并推送镜像

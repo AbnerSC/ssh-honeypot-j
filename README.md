@@ -128,14 +128,15 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
 
 镜像基于 JDK 25 运行时构建，开箱即用。
 
-### 使用官方镜像（推荐）
+### 使用docker镜像（推荐）
 
 创建 `docker-compose.yml`，将日志目录挂载到宿主机，并映射 SSH(2222) 与 Telnet(2323) 端口：
 
 ```yaml
 services:
   ssh-honeypot-j:
-    image: crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm/ssh-honeypot-j:latest
+    image: babyfly/ssh-honeypot-j:latest
+    # 阿里云：crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm/ssh-honeypot-j:latest
     container_name: ssh-honeypot-j
     restart: always
     volumes:
@@ -178,6 +179,13 @@ docker compose up -d
     - ${PWD}/db:/app/db
     - ${PWD}/config.yaml:/app/config.yaml
   ```
+  
+登录：
+```angular2html
+地址：http://127.0.0.1:8080
+账号：admin
+密码：admin123
+```
 
 ## 测试
 
@@ -208,7 +216,16 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 
 ## 版本历史
 
-### v1.1.2（2026-08-18）
+### release-v1.1.3（2026-08-20）
+
+> 本期聚焦部署与易用性提升
+
+**新增**
+- 添加 Docker 镜像自动发布功能
+
+---
+
+### release-v1.1.2（2026-08-18）
 
 > 本期聚焦系统稳定性
 
@@ -221,14 +238,14 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 
 ---
 
-### v1.1.1（2026-08-17）
+### release-v1.1.1（2026-08-17）
 
 **新增**
 - **攻击来源归属地**：查询和统计增加攻击归属地信息，方便通过地区拦截攻击者
 
 ---
 
-### v1.1.0（2026-08-17）
+### release-v1.1.0（2026-08-17）
 
 > 本期聚焦可观测性：攻击数据结构化落库，并提供内置 Web 可视化管理控制台。
 
@@ -243,7 +260,7 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 
 ---
 
-### v1.0.3（2026-08-14）
+### release-v1.0.3（2026-08-14）
 
 > 本期聚焦账号隔离与权限真实度，是对 1.0.2 的能力增强版本。
 
@@ -255,7 +272,7 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 
 ---
 
-### v1.0.2（2026-08-13）
+### release-v1.0.2（2026-08-13）
 
 > 引入容器化交付，蜜罐可一键 Docker 部署。
 
@@ -271,7 +288,7 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 
 ---
 
-### v1.0.1（2026-08-12）
+### release-v1.0.1（2026-08-12）
 
 > 工程化与真实性增强版本，奠定后续多协议、多账号的基础。
 
@@ -292,7 +309,7 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 
 ---
 
-### v1.0.0（2026-08-11）
+### release-v1.0.0（2026-08-11）
 
 > 首个可用版本，提供中交互 SSH/Telnet 蜜罐核心能力。
 
