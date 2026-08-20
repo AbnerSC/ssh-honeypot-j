@@ -18,6 +18,7 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
+import java.util.jar.Manifest;
 
 /**
  * SSH/Telnet/数据库蜜罐主入口。
@@ -36,6 +37,9 @@ import java.util.logging.SimpleFormatter;
  *   iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
  */
 public class Main {
+    /** 启动横幅版本号：读自 MANIFEST.MF 的 Implementation-Version（打包时由 Maven 注入 pom.xml 版本），IDE 直跑时回退 dev */
+    private static final String VERSION = resolveVersion();
+
     static void main(String[] args) throws Exception {
         String configPath = HoneypotConfig.DEFAULT_CONFIG_FILE;
 
@@ -64,12 +68,12 @@ public class Main {
         root.addHandler(handler);
         root.setLevel(Level.INFO);
 
-        System.out.println("""
+        System.out.printf("""
                 ================================================
-                  SSH/Telnet/DB 蜜罐  v1.1.0  (Java 25)
+                  SSH/Telnet/DB 蜜罐  v%s  (Java 25)
                   仅用于安全研究与授权环境，请勿用于非法用途
                 ================================================
-                """);
+                %n""", VERSION);
 
         VirtualFileSystem fs = new VirtualFileSystem(hostname);
         // IP 归属地定位器：优先加载外部 ip2region v4/v6 库文件，缺失时回退 jar 内置库，均不可用时自动降级（归属地留空）
@@ -153,6 +157,17 @@ public class Main {
         }, "honeypot-shutdown"));
 
         shutdown.await(); // 主线程挂起直到关闭完成
+    }
+
+    /** 从 fat-jar 清单读取项目版本号；IDE 或未打包场景下清单缺失时回退 dev */
+    private static String resolveVersion() {
+        try (var in = Main.class.getResourceAsStream("/META-INF/MANIFEST.MF")) {
+            if (in != null) {
+                String version = new Manifest(in).getMainAttributes().getValue("App-Version");
+                if (version != null && !version.isBlank()) return version;
+            }
+        } catch (Exception ignored) {}
+        return "dev";
     }
 
     private static void printUsage() {

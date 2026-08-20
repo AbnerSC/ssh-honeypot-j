@@ -103,6 +103,8 @@
                                         <JVM-Options>--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:-EnableFinalization -XX:MaxRAMPercentage=75.0</JVM-Options>
                                         <!-- Jetty 等依赖为 Multi-Release jar，合并后保留标记 -->
                                         <Multi-Release>true</Multi-Release>
+                                        <!-- 注入 pom.xml 项目版本号，运行时读取用于启动横幅展示 -->
+                                        <App-Version>${project.version}</App-Version>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
