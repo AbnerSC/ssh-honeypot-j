@@ -9,9 +9,6 @@
 #   - Docker Hub（需在仓库 Settings -> Secrets 中配置：
 #       DOCKERHUB_USERNAME  Docker Hub 用户名
 #       DOCKERHUB_TOKEN     Docker Hub 访问令牌（Account Settings -> Security -> New Access Token））
-#   - 阿里云容器镜像仓库（需在仓库 Settings -> Secrets 中配置：
-#       ALIYUN_CR_USERNAME  阿里云账号（或 RAM 用户）
-#       ALIYUN_CR_PASSWORD  ACR 控制台「访问凭证」中设置的固定密码）
 #     未配置时自动跳过阿里云推送，仅发布到 Docker Hub
 # =====================================================================
 name: Docker 多架构镜像构建
@@ -24,8 +21,6 @@ on:
 
 env:
   # 阿里云容器镜像仓库（registry/namespace 形式，与 pom.xml 保持一致）
-  ALIYUN_REGISTRY: crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com
-  ALIYUN_NAMESPACE: scdm
   IMAGE_NAME: ssh-honeypot-j
 
 jobs:
@@ -35,8 +30,6 @@ jobs:
       contents: read
     env:
       DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
-      ALIYUN_USER: ${{ secrets.ALIYUN_CR_USERNAME }}
-      ALIYUN_PASS: ${{ secrets.ALIYUN_CR_PASSWORD }}
     steps:
       - name: 检出代码
         uses: actions/checkout@v4

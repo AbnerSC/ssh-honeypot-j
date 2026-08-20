@@ -6,7 +6,7 @@
 #   - 编译阶段固定 --platform=$BUILDPLATFORM（构建机原生架构）运行 Maven，
 #     fat-jar 为纯 Java 产物（sqlite-jdbc 运行时自动加载对应架构 native 库），
 #     无需按目标架构重复编译，避免 QEMU 模拟，多架构构建速度更快
-#   - 运行阶段基于 eclipse-temurin:25-jre（官方多架构镜像），与 pom.xml
+#   - 运行阶段基于 openjdk:25-ea-oracle（官方多架构镜像），与 pom.xml
 #     中 fabric8 插件的镜像内容保持一致（app.jar + config.yaml）
 #
 # 本地手动构建多架构镜像：
