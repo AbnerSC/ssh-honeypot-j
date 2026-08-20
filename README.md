@@ -64,14 +64,32 @@ telnet:
   enabled: true      # 是否启用 Telnet 服务
   port: 2323         # Telnet 监听端口
 
+# 数据库蜜罐：连接时立即返回默认的认证失败信息并断开连接，不做任何协议交互
+mysql:
+  enabled: true      # 是否启用 MySQL 蜜罐（模拟 8.4，连接即返回 Access denied 1045/28000）
+  port: 3306         # MySQL 监听端口
+
+postgresql:
+  enabled: true      # 是否启用 PostgreSQL 蜜罐（模拟 17，连接即返回 FATAL 28P01 认证失败）
+  port: 5432         # PostgreSQL 监听端口
+
+redis:
+  enabled: true      # 是否启用 Redis 蜜罐（模拟 7，连接即返回 WRONGPASS）
+  port: 6379         # Redis 监听端口
+
 log:
   file: logs/honeypot.jsonl   # 攻击日志文件路径
-  db: db/database.db          # SQLite 数据库文件（与 JSONL 双写同一份数据，供 Web 可视化）
+  db: db/database.db        # SQLite 数据库文件（与 JSONL 双写同一份数据，供 Web 可视化）
+  ipdb_v4: db/ip2region_v4.xdb  # IP 归属地离线库文件（ip2region xdb 格式 ipv4），解析来源 IP 为“国家 省份 城市”；
+  ipdb_v6: db/ip2region_v6.xdb  # IP 归属地离线库文件（ip2region xdb 格式 ipv6），解析来源 IP 为“国家 省份 城市”；
+  # 可选覆盖项：文件缺失时自动回退使用 jar 内置库（已随包打包），均缺失时归属地留空，不影响其他功能
 
+# Web 可视化控制台：攻击日志统计与明细查询、系统用户管理（与蜜罐同进程部署）
+# 首次启动自动创建默认管理员 admin/admin123，登录后强制修改密码
 web:
-  enabled: true               # 是否启用 Web 控制台
-  port: 8080                  # Web 监听端口
-  sessionTimeoutMinutes: 30   # 管理端登录会话超时（分钟）
+  enabled: true            # 是否启用 Web 控制台
+  port: 8080               # Web 监听端口
+  sessionTimeoutMinutes: 30  # 管理端登录会话超时（分钟）
 ```
 
 配置文件不存在时使用内置默认值（SSH:2222、Telnet:2323、日志 logs/honeypot.jsonl、Web:8080）。
@@ -93,14 +111,7 @@ auth:
 
 > 也支持在配置文件中不写 `credentials`，此时使用内置默认弱口令本。
 
-### 映射到真实 22/23 端口（Linux）
-
-```bash
-sudo iptables -t nat -A PREROUTING -p tcp --dport 22 -j REDIRECT --to-port 2222
-sudo iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
-```
-
-注意先把真实 sshd 移到别的端口，避免把自己锁在门外。
+> 注意先把真实 sshd 移到别的端口，避免把自己锁在门外。
 
 ## Web 可视化控制台
 
@@ -136,7 +147,7 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
 services:
   ssh-honeypot-j:
     image: babyfly/ssh-honeypot-j:latest
-    # 阿里云：crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm/ssh-honeypot-j:latest
+    # 阿里云：crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm/ssh-honeypot-j:dev
     container_name: ssh-honeypot-j
     restart: always
     volumes:
