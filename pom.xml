@@ -6,7 +6,7 @@
 
     <groupId>org.open.scdm</groupId>
     <artifactId>ssh-honeypot-j</artifactId>
-    <version>1.1.2</version>
+    <version>1.1.3</version>
     <packaging>jar</packaging>
     <description>Java版本 SSH 蜜罐</description>
 
