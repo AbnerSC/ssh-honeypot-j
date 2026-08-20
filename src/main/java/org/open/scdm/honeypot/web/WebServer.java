@@ -144,7 +144,7 @@ public class WebServer implements AutoCloseable {
         String path = ctx.path();
         if (path.startsWith("/api/login")) return;
         boolean isApi = path.startsWith("/api/");
-        boolean publicStatic = !isApi && (path.equals("/login.html")
+        boolean publicStatic = !isApi && (path.equals("/login.html") || path.equals("/favicon.ico")
                 || path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/img/"));
         if (isApi || !publicStatic) {
             if (AuthService.currentUser(ctx) == null) {
