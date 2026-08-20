@@ -135,7 +135,7 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 23 -j REDIRECT --to-port 2323
 ```yaml
 services:
   ssh-honeypot-j:
-    image: scdm/ssh-honeypot-j:latest
+    image: crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm/ssh-honeypot-j:latest
     container_name: ssh-honeypot-j
     restart: always
     volumes:

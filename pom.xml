@@ -19,7 +19,10 @@
         <!-- Nexus Docker 仓库（host/repository 形式） -->
         <docker.registry>repo.pi.mmxx.fun/docker-releases-amd64/scdm</docker.registry>
         <docker.image>${docker.registry}/${project.artifactId}:${project.version}</docker.image>
-        <!-- 仓库认证凭据配置在 ~/.m2/settings.xml 的 <servers> 中，id 为 ${docker.registry} 的主机名部分 -->
+        <!-- 阿里云容器镜像仓库（registry/namespace 形式），deploy 时与 Nexus 同时推送 -->
+        <docker.registry.aliyun>crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm</docker.registry.aliyun>
+        <docker.image.aliyun>${docker.registry.aliyun}/${project.artifactId}:${project.version}</docker.image.aliyun>
+        <!-- 仓库认证凭据配置在 ~/.m2/settings.xml 的 <servers> 中，id 为各 registry 的主机名部分 -->
         <!-- mvn deploy 仅构建并推送 Docker 镜像，不发布 jar 到 Maven 仓库 -->
         <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
@@ -120,7 +123,7 @@
             </plugin>
             <!-- Docker 镜像构建/推送插件：
                  mvn package  -> 仅打包 jar，不构建镜像（避免本地无 Docker 时失败）
-                 mvn deploy   -> 构建本地 Docker 镜像并推送到 Nexus 仓库 -->
+                 mvn deploy   -> 构建本地 Docker 镜像并推送到 Nexus 与阿里云容器镜像仓库 -->
             <plugin>
                 <groupId>io.fabric8</groupId>
                 <artifactId>docker-maven-plugin</artifactId>
@@ -179,11 +182,61 @@
                                 </volumes>
                             </build>
                         </image>
+                        <!-- 阿里云容器镜像仓库：构建配置与 Nexus 镜像完全一致，deploy 时一并推送（二次构建复用 docker 层缓存） -->
+                        <image>
+                            <name>${docker.image.aliyun}</name>
+                            <build>
+                                <from>${docker.baseImage}</from>
+                                <tags>
+                                    <tag>latest</tag>
+                                </tags>
+                                <workdir>/app</workdir>
+                                <assembly>
+                                    <targetDir>/app</targetDir>
+                                    <inline>
+                                        <files>
+                                            <file>
+                                                <source>${project.build.directory}/${project.build.finalName}.jar</source>
+                                                <destName>app.jar</destName>
+                                                <fileMode>0644</fileMode>
+                                            </file>
+                                            <file>
+                                                <source>${project.basedir}/config.yaml</source>
+                                                <destName>config.yaml</destName>
+                                                <fileMode>0644</fileMode>
+                                            </file>
+                                        </files>
+                                    </inline>
+                                </assembly>
+                                <entryPoint>
+                                    <exec>
+                                        <arg>java</arg>
+                                        <arg>--enable-native-access=ALL-UNNAMED</arg>
+                                        <arg>-XX:+UseCompactObjectHeaders</arg>
+                                        <arg>-XX:MaxRAMPercentage=75.0</arg>
+                                        <arg>-jar</arg>
+                                        <arg>app.jar</arg>
+                                    </exec>
+                                </entryPoint>
+                                <ports>
+                                    <port>2222</port>
+                                    <port>2323</port>
+                                    <port>3306</port>
+                                    <port>5432</port>
+                                    <port>6379</port>
+                                    <port>8080</port>
+                                </ports>
+                                <volumes>
+                                    <volume>/app/logs</volume>
+                                    <volume>/app/db</volume>
+                                </volumes>
+                            </build>
+                        </image>
                     </images>
-                    <!-- 仓库认证：从 ~/.m2/settings.xml 的 <servers> 中读取（id = ${docker.registry} 的主机名） -->
+                    <!-- 仓库认证：从 ~/.m2/settings.xml 的 <servers> 中读取（id = 各 registry 的主机名） -->
                 </configuration>
                 <executions>
-                    <!-- mvn deploy 时构建镜像并推送到 Nexus 仓库 -->
+                    <!-- mvn deploy 时构建镜像并推送到 Nexus 与阿里云容器镜像仓库 -->
                     <execution>
                         <id>docker-build-push</id>
                         <phase>deploy</phase>
