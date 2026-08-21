@@ -33,6 +33,24 @@ https://github.com/AbnerSC/ssh-honeypot-j.git
   提供攻击日志统计图表、明细查询与系统用户管理，详见下文
 - **exec 通道支持**：记录 `ssh user@host "cmd"` 形式的非交互攻击
 
+## 技术栈
+
+| 类别 | 技术 | 版本 | 用途 |
+| --- | --- | --- | --- |
+| 语言 / 运行时 | Java | 25 | 开发语言，启用紧凑对象头（JEP 519）等运行时优化 |
+| SSH 协议 | Apache MINA SSHD | 2.19.0 | 实现 SSH 服务端与协议交互 |
+| Telnet 协议 | 原生 Socket | - | 实现 Telnet 协议与 IAC 终端协商 |
+| Web 控制台 | Javalin（Jetty 12） | 7.2.3 | 轻量嵌入式 Web 框架，承载管理 API 与静态前端 |
+| 前端图表 | ECharts（WebJar） | 6.1.0 | 攻击统计图表，随 fat-jar 打包离线可用 |
+| JSON | Gson | 2.14.0 | 接口 JSON 序列化 / 反序列化 |
+| 配置解析 | SnakeYAML | 2.6 | 解析 `config.yaml` 配置文件 |
+| 存储 | SQLite（sqlite-jdbc） | 3.53.2.1 | 攻击事件与系统用户结构化存储（WAL 模式） |
+| IP 归属地 | ip2region | 3.3.7 | 离线 xdb 库解析来源 IP 归属地（IPv4 / IPv6 双库） |
+| 日志 | SLF4J + JDK14 | 2.0.18 | 运行日志门面与输出 |
+| 构建打包 | Maven Shade Plugin | 3.5.3 | 生成含全部依赖的可执行 fat-jar |
+| 容器化 | Docker / docker-maven-plugin | 0.49.0 | 基于 `eclipse-temurin:25-jdk-noble` 构建镜像，`mvn deploy` 推送 |
+| CI/CD | GitHub Actions | - | 多架构镜像自动构建与发布 |
+
 ## 构建
 
 ```bash
@@ -229,7 +247,8 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 ## 版本历史
 
 ### release-v1.1.5（即将发布）
-- 优化性能，降低20%内存使用
+- 优化性能，降低内存使用
+- 补充项目文档
 
 ### release-v1.1.4（2026-08-21）
 - 更换 Docker 基础镜像，提升安全性
