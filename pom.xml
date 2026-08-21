@@ -94,11 +94,11 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>org.open.scdm.honeypot.Main</mainClass>
                                     <manifestEntries>
-                                        <!-- JDK 25 运行时优化：紧凑对象头(JEP 519)、禁用遗留 finalization(JEP 513)；
+                                        <!-- JDK 25 运行时优化：紧凑对象头(JEP 519)；
                                              sqlite-jdbc 需加载 native 库，显式授权避免后续 JDK 拦截；
                                              低内存调优：Serial GC + 固定小堆（ip2region 已用 VIndexCache，无需大堆）+ 栈/代码缓存/元空间封顶 -->
                                         <Add-Opens>java.base/java.lang</Add-Opens>
-                                        <JVM-Options>--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:-EnableFinalization -XX:+UseSerialGC -Xms32m -Xmx160m -Xss512k -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m</JVM-Options>
+                                        <JVM-Options>--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:+UseSerialGC -Xms32m -Xmx160m -Xss512k -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m</JVM-Options>
                                         <!-- Jetty 等依赖为 Multi-Release jar，合并后保留标记 -->
                                         <Multi-Release>true</Multi-Release>
                                         <!-- 注入 pom.xml 项目版本号，运行时读取用于启动横幅展示 -->
@@ -163,7 +163,6 @@
                                         <arg>java</arg>
                                         <arg>--enable-native-access=ALL-UNNAMED</arg>
                                         <arg>-XX:+UseCompactObjectHeaders</arg>
-                                        <arg>-XX:-EnableFinalization</arg>
                                         <arg>-XX:+UseSerialGC</arg>
                                         <arg>-Xms32m</arg>
                                         <arg>-Xmx160m</arg>
