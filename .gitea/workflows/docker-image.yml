@@ -35,11 +35,10 @@ permissions:
 env:
   IMAGE_NAME: ssh-honeypot-j
   # 自托管 runner 多在国内，注入阿里云 Maven 镜像加速依赖下载（置空可关闭）
-  MAVEN_MIRROR: https://maven.aliyun.com/repository/public
+  MAVEN_MIRROR: https://repo.pi.mmxx.fun/repository/maven-public
   # buildkit（docker-container driver）拉取镜像不走 docker daemon 的 registry-mirrors，
   # 基础镜像需显式经 Nexus 的 docker 代理仓库拉取，避免 runner 直连 docker.io 超时
-  DOCKER_PROXY: repo.pi.mmxx.fun/repository/docker-public
-
+  DOCKER_PROXY: repo.pi.mmxx.fun/docker-public
 jobs:
   build-and-push:
     name: 构建并推送镜像到 Nexus
