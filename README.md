@@ -147,7 +147,7 @@ auth:
 services:
   ssh-honeypot-j:
     image: babyfly/ssh-honeypot-j:latest
-    # 阿里云：crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm/ssh-honeypot-j:dev
+    # 阿里云：crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm/ssh-honeypot-j:latest
     container_name: ssh-honeypot-j
     restart: always
     volumes:
