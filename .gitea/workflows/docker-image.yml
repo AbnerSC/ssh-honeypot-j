@@ -1,23 +1,26 @@
 # =====================================================================
-# GitHub Actions：Docker 多架构镜像构建并推送到 Docker Hub
-# （linux/amd64 + linux/arm64）
+# Gitea Actions：Docker 镜像构建并推送到自建 Nexus 仓库
+# （仅 linux/amd64）
 #
-# 与 .gitea/workflows/docker-image.yml 分工：
-#   - 本文件只会被 GitHub 读取，推送到 Docker Hub 官方仓库
-#   - Gitea 侧工作流只会被 Gitea Actions 读取，推送到自建 Nexus
+# 与 .github/workflows/docker-image.yml 分工：
+#   - GitHub 侧工作流只会被 GitHub 读取，推送到 Docker Hub
+#   - 本文件只会被 Gitea Actions 读取，推送到自建 Nexus
 #
 # 触发方式：
 #   - 推送 release-v 开头的 tag（如 release-v1.2.3）自动构建，
 #     推送 版本号（1.2.3）+ latest 标签
-#   - 支持在 Actions 页面手动触发：选择 release-v 开头的 tag 时
-#     同样推送 版本号 + latest 标签；选择分支时仅推送 latest
+#   - 支持在 Actions 页面手动触发（需 Gitea >= 1.21）：
+#     选择 release-v 开头的 tag 时同样推送 版本号 + latest，
+#     选择分支时仅推送 latest
 #
-# 推送目标：
-#   - Docker Hub（需在仓库 Settings -> Secrets 中配置：
-#       DOCKERHUB_USERNAME  Docker Hub 用户名
-#       DOCKERHUB_TOKEN     Docker Hub 访问令牌（Account Settings -> Security -> New Access Token））
+# 前置条件：
+#   - 仓库 Settings -> Secrets 中配置：
+#       NEXUS_REGISTRY   Nexus Docker 仓库地址（host:port，如 nexus.example.com:8082）
+#       NEXUS_USERNAME   Nexus 账号
+#       NEXUS_PASSWORD   Nexus 密码
+#   - 已注册可用的 act_runner
 # =====================================================================
-name: Docker 多架构镜像构建
+name: Docker 镜像构建（Nexus）
 
 on:
   push:
@@ -30,16 +33,29 @@ permissions:
 
 env:
   IMAGE_NAME: ssh-honeypot-j
-  IMAGE_USERNAME: babyfly
+  # 自托管 runner 多在国内，注入阿里云 Maven 镜像加速依赖下载（置空可关闭）
+  MAVEN_MIRROR: https://maven.aliyun.com/repository/public
 
 jobs:
   build-and-push:
-    name: 构建并推送多架构镜像到 Docker Hub
+    name: 构建并推送镜像到 Nexus
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+
+      # 提前校验 Secrets，避免构建完成后才因镜像名/登录失败报错
+      - name: 检查 Nexus 配置
+        shell: bash
+        env:
+          NEXUS_REGISTRY: ${{ secrets.NEXUS_REGISTRY }}
+        run: |
+          if [[ -z "$NEXUS_REGISTRY" ]]; then
+            echo "::error::未配置 Secret：NEXUS_REGISTRY（Nexus Docker 仓库地址 host:port）"
+            exit 1
+          fi
+          echo "Nexus 仓库地址：$NEXUS_REGISTRY"
 
       # 从 tag 解析版本号：release-v1.2.3 -> 1.2.3
       # 无论 tag 推送还是手动选择 tag 触发，只要 ref 以 release-v 开头即解析；
@@ -58,25 +74,29 @@ jobs:
             echo "解析出版本号：$TAG"
           fi
 
-      # arm64 跨架构构建需要 QEMU 模拟（运行阶段 FROM 目标架构基础镜像）
-      - name: 设置 QEMU
-        uses: docker/setup-qemu-action@v3
-
+      # 仅构建 linux/amd64 单架构，无需 QEMU 跨架构模拟
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@v3
+        # 若 Nexus 使用自签名证书，取消下面注释并改为实际地址，让 buildkit 放行
+        # with:
+        #   config-inline: |
+        #     [registry."nexus.example.com:8082"]
+        #       http = false
+        #       insecure = true
 
-      - name: 登录 Docker Hub
+      - name: 登录 Nexus
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ secrets.NEXUS_REGISTRY }}
+          username: ${{ secrets.NEXUS_USERNAME }}
+          password: ${{ secrets.NEXUS_PASSWORD }}
 
       # release-v 开头的 tag（推送或手动选择）：1.2.3、latest；手动选择分支：仅 latest
       - name: 生成镜像标签与元数据
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_USERNAME }}/${{ env.IMAGE_NAME }}
+          images: ${{ secrets.NEXUS_REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
           tags: |
@@ -87,13 +107,15 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            MAVEN_MIRROR=${{ env.MAVEN_MIRROR }}
           # 关闭 provenance 证明，避免部分客户端拉取时出现 unknown digest
           provenance: false
-          # 使用 GitHub Actions 缓存加速 Maven 依赖层复用
+          # 使用 Actions 缓存加速 Maven 依赖层复用
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
