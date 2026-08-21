@@ -29,6 +29,7 @@ public class LogRepository implements AutoCloseable {
         try (Statement st = conn.createStatement()) {
             st.execute("PRAGMA busy_timeout=5000");
             st.execute("PRAGMA query_only=ON"); // 防御性设置：本连接永不允许写
+            st.execute("PRAGMA cache_size=-600"); // 只读小查询，页缓存收紧至约 600KB
         }
     }
 

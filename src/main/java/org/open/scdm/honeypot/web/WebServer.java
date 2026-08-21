@@ -12,7 +12,6 @@ import org.open.scdm.honeypot.geo.IpLocator;
 
 import java.io.InputStream;
 import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
@@ -35,7 +34,8 @@ public class WebServer implements AutoCloseable {
     private final LogRepository logRepo;
     private final UserRepository userRepo;
     private final AuditLogRepository auditRepo;
-    private final String echartsJs;
+    /** ECharts WebJar 类路径资源地址：启动时解析一次，请求时流式读取，避免整库常驻堆内存 */
+    private final String echartsResource;
 
     /**
      * 启动 Web 控制台。失败不影响蜜罐主服务（仅告警并返回 null）。
@@ -57,7 +57,7 @@ public class WebServer implements AutoCloseable {
         this.userRepo = new UserRepository(dbFile);
         this.auditRepo = new AuditLogRepository(dbFile, ipLocator);
         AuthService auth = new AuthService(userRepo);
-        this.echartsJs = loadEcharts();
+        this.echartsResource = resolveEchartsResource();
 
         Gson gson = new Gson();
         // Javalin 7：路由/前置拦截/异常处理器必须在创建时（config.routes）前置注册
@@ -131,9 +131,14 @@ public class WebServer implements AutoCloseable {
 
             new ApiController(logRepo, userRepo, auth, auditRepo).register(routes);
 
-            // ECharts 图表库：从 WebJar 类路径加载一次，长期驻留内存输出
-            routes.get("/api/vendor/echarts.js", ctx ->
-                    ctx.contentType("application/javascript; charset=utf-8").result(echartsJs));
+            // ECharts 图表库：请求时从 WebJar 类路径流式读取，不常驻内存
+            routes.get("/api/vendor/echarts.js", ctx -> {
+                InputStream in = WebServer.class.getClassLoader().getResourceAsStream(echartsResource);
+                if (in == null) throw new IllegalStateException("ECharts 资源读取失败: " + echartsResource);
+                ctx.contentType("application/javascript; charset=utf-8")
+                        .header("Cache-Control", "public, max-age=86400")
+                        .result(in);
+            });
         });
     }
 
@@ -191,11 +196,11 @@ public class WebServer implements AutoCloseable {
     }
 
     /**
-     * 从 WebJar 类路径加载 echarts.min.js（仅加载一次）。
+     * 解析 WebJar 中 echarts.min.js 的类路径资源地址（启动时仅校验存在性，不读入内存）。
      * 经 WebJar 自带的 maven pom.properties 读取实际版本号，避免硬编码版本目录；
      * 兼容 IDE 开发目录与 shade fat-jar 两种运行形态。
      */
-    private static String loadEcharts() throws Exception {
+    private static String resolveEchartsResource() throws Exception {
         var loader = WebServer.class.getClassLoader();
         try (InputStream meta = loader.getResourceAsStream("META-INF/maven/org.webjars.npm/echarts/pom.properties")) {
             if (meta != null) {
@@ -206,7 +211,7 @@ public class WebServer implements AutoCloseable {
                     String resource = "META-INF/resources/webjars/echarts/" + version + "/dist/echarts.min.js";
                     try (InputStream in = loader.getResourceAsStream(resource)) {
                         if (in != null) {
-                            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                            return resource;
                         }
                     }
                 }

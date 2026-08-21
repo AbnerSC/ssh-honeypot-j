@@ -95,9 +95,10 @@
                                     <mainClass>org.open.scdm.honeypot.Main</mainClass>
                                     <manifestEntries>
                                         <!-- JDK 25 运行时优化：紧凑对象头(JEP 519)、禁用遗留 finalization(JEP 513)；
-                                             sqlite-jdbc 需加载 native 库，显式授权避免后续 JDK 拦截 -->
+                                             sqlite-jdbc 需加载 native 库，显式授权避免后续 JDK 拦截；
+                                             低内存调优：Serial GC + 固定小堆（ip2region 已用 VIndexCache，无需大堆）+ 栈/代码缓存/元空间封顶 -->
                                         <Add-Opens>java.base/java.lang</Add-Opens>
-                                        <JVM-Options>--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:-EnableFinalization -XX:MaxRAMPercentage=75.0</JVM-Options>
+                                        <JVM-Options>--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:-EnableFinalization -XX:+UseSerialGC -Xms32m -Xmx160m -Xss512k -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m</JVM-Options>
                                         <!-- Jetty 等依赖为 Multi-Release jar，合并后保留标记 -->
                                         <Multi-Release>true</Multi-Release>
                                         <!-- 注入 pom.xml 项目版本号，运行时读取用于启动横幅展示 -->
@@ -156,13 +157,19 @@
                                     </inline>
                                 </assembly>
                                 <!-- JVM 参数与 MANIFEST 中 JVM-Options 保持一致；
-                                     MaxRAMPercentage：低配额容器下默认堆仅容器内存 1/4，显式放宽避免 OOM -->
+                                     低内存调优：Serial GC + 固定小堆（ip2region 已用 VIndexCache，无需大堆） -->
                                 <entryPoint>
                                     <exec>
                                         <arg>java</arg>
                                         <arg>--enable-native-access=ALL-UNNAMED</arg>
                                         <arg>-XX:+UseCompactObjectHeaders</arg>
-                                        <arg>-XX:MaxRAMPercentage=75.0</arg>
+                                        <arg>-XX:-EnableFinalization</arg>
+                                        <arg>-XX:+UseSerialGC</arg>
+                                        <arg>-Xms32m</arg>
+                                        <arg>-Xmx160m</arg>
+                                        <arg>-Xss512k</arg>
+                                        <arg>-XX:MaxMetaspaceSize=128m</arg>
+                                        <arg>-XX:ReservedCodeCacheSize=64m</arg>
                                         <arg>-jar</arg>
                                         <arg>app.jar</arg>
                                     </exec>

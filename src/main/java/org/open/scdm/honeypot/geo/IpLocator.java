@@ -29,7 +29,7 @@ public class IpLocator implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(IpLocator.class.getName());
 
     /** 缓存容量上限：蜜罐场景来源 IP 数量有限，超限后仅查询不缓存，防止异常流量撑爆内存 */
-    private static final int CACHE_LIMIT = 65536;
+    private static final int CACHE_LIMIT = 8192;
 
     /** jar 内置 xdb 库资源路径：随 fat-jar 打包，外部文件缺失时兜底加载 */
     private static final String BUILTIN_V4 = "db/ip2region_v4.xdb";

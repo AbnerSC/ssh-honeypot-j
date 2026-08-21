@@ -44,6 +44,7 @@ public class UserRepository implements AutoCloseable {
         this.conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.toAbsolutePath());
         try (Statement st = conn.createStatement()) {
             st.execute("PRAGMA busy_timeout=5000");
+            st.execute("PRAGMA cache_size=-600"); // 页缓存收紧至约 600KB，降低常驻原生内存
             st.execute("""
                     CREATE TABLE IF NOT EXISTS sys_users (
                         id            INTEGER PRIMARY KEY AUTOINCREMENT,

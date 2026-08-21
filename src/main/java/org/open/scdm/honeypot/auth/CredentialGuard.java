@@ -33,6 +33,8 @@ public class CredentialGuard {
     private final Map<String, Long> lastFailAt = new ConcurrentHashMap<>();
     /** IP -> 锁定截止时间戳（毫秒，内存缓存） */
     private final Map<String, Long> lockedUntil = new ConcurrentHashMap<>();
+    /** 上次清扫过期条目的时间戳：防止只失败一次即消失的 IP 残留导致 Map 无限增长 */
+    private long lastSweepAt = System.currentTimeMillis();
 
     public CredentialGuard(Map<String, List<String>> credentials, int maxFailures,
                            int windowMinutes, int lockMinutes, AttackLogger logger) {
@@ -69,6 +71,7 @@ public class CredentialGuard {
      * 已锁定的 IP 直接拒绝；窗口外的失败会重置计数，窗口内累计失败达到阈值后立即锁定并记录 ip_locked 事件。
      */
     public synchronized boolean authenticate(String ip, String username, String password) {
+        sweepExpired();
         if (isLocked(ip)) return false;
         List<String> expectedList = username == null ? null : credentials.get(username);
         String pwd = password == null ? "" : password;
@@ -96,6 +99,26 @@ public class CredentialGuard {
             }
         }
         return ok;
+    }
+
+    /** 分钟级清扫：移除失败计数窗口外与锁定已过期的 IP 条目（authenticate 持锁调用，无并发问题） */
+    private void sweepExpired() {
+        long now = System.currentTimeMillis();
+        if (now - lastSweepAt < 60_000) return;
+        lastSweepAt = now;
+        lastFailAt.forEach((ip, t) -> {
+            if (now - t > windowMillis) {
+                lastFailAt.remove(ip);
+                failCounts.remove(ip);
+            }
+        });
+        lockedUntil.forEach((ip, until) -> {
+            if (now >= until) {
+                lockedUntil.remove(ip);
+                failCounts.remove(ip);
+                lastFailAt.remove(ip);
+            }
+        });
     }
 
     /** 连续失败阈值（Telnet 侧用作单连接允许的最大尝试次数） */

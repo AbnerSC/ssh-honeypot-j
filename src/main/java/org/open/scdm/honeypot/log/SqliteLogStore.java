@@ -125,6 +125,7 @@ public class SqliteLogStore implements AutoCloseable {
             st.execute("PRAGMA journal_mode=WAL");   // 读写并发：Web 端查询不阻塞蜜罐写入
             st.execute("PRAGMA synchronous=NORMAL"); // WAL 模式下兼顾写入性能与可靠性
             st.execute("PRAGMA busy_timeout=5000");
+            st.execute("PRAGMA cache_size=-600");  // 页缓存收紧至约 600KB，降低常驻原生内存
             for (String ddl : SCHEMA) {
                 st.execute(ddl);
             }
