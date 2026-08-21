@@ -39,7 +39,7 @@ env:
 jobs:
   build-and-push:
     name: 构建并推送镜像到 Nexus
-    runs-on: ubuntu-latest
+    runs-on: nexus
     timeout-minutes: 60
     steps:
       - name: 检出代码
