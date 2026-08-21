@@ -1,6 +1,8 @@
-# syntax=docker/dockerfile:1
 # =====================================================================
 # ssh-honeypot-j 多架构镜像构建文件（linux/amd64 & linux/arm64）
+#
+# 未使用 # syntax 指令：避免 buildkit 额外拉取 docker/dockerfile 前端镜像，
+# 本文件仅用标准语法，buildkit 内置前端即可解析
 #
 # 多阶段构建：
 #   - 编译阶段固定 --platform=$BUILDPLATFORM（构建机原生架构）运行 Maven，

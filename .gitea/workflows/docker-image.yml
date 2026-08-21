@@ -15,7 +15,8 @@
 #
 # 前置条件：
 #   - 仓库 Settings -> Secrets 中配置：
-#       NEXUS_REGISTRY   Nexus Docker 仓库地址（host:port，如 nexus.example.com:8082）
+#       NEXUS_REGISTRY   Nexus Docker 仓库地址（host[:port][/路径]，如
+#                        nexus.example.com:8082 或 nexus.example.com/repository/docker-releases）
 #       NEXUS_USERNAME   Nexus 账号
 #       NEXUS_PASSWORD   Nexus 密码
 #   - 已注册可用的 act_runner
@@ -35,6 +36,9 @@ env:
   IMAGE_NAME: ssh-honeypot-j
   # 自托管 runner 多在国内，注入阿里云 Maven 镜像加速依赖下载（置空可关闭）
   MAVEN_MIRROR: https://maven.aliyun.com/repository/public
+  # buildkit（docker-container driver）拉取镜像不走 docker daemon 的 registry-mirrors，
+  # 基础镜像需显式经 Nexus 的 docker 代理仓库拉取，避免 runner 直连 docker.io 超时
+  DOCKER_PROXY: repo.pi.mmxx.fun/repository/docker-public
 
 jobs:
   build-and-push:
@@ -52,7 +56,13 @@ jobs:
           NEXUS_REGISTRY: ${{ secrets.NEXUS_REGISTRY }}
         run: |
           if [[ -z "$NEXUS_REGISTRY" ]]; then
-            echo "::error::未配置 Secret：NEXUS_REGISTRY（Nexus Docker 仓库地址 host:port）"
+            echo "::error::未配置 Secret：NEXUS_REGISTRY（Nexus Docker 仓库地址 host[:port][/路径]）"
+            exit 1
+          fi
+          # 镜像 tag 允许 host[:port][/仓库路径]（Nexus 路径式仓库），禁止协议前缀、首尾斜杠、大写字母等，
+          # 提前校验避免构建完才报 invalid reference format
+          if [[ "$NEXUS_REGISTRY" =~ :// || "$NEXUS_REGISTRY" == /* || "$NEXUS_REGISTRY" == */ || "$NEXUS_REGISTRY" == *//* || -n "${NEXUS_REGISTRY//[a-z0-9._\/:-]/}" ]]; then
+            echo "::error::NEXUS_REGISTRY 必须是 host[:port][/路径] 形式（如 nexus.example.com:8082 或 nexus.example.com/repository/docker），不能包含协议前缀、首尾斜杠或大写字母"
             exit 1
           fi
           echo "Nexus 仓库地址：$NEXUS_REGISTRY"
@@ -113,6 +123,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             MAVEN_MIRROR=${{ env.MAVEN_MIRROR }}
+            MAVEN_IMAGE=${{ env.DOCKER_PROXY }}/library/maven:3-eclipse-temurin-25
+            BASE_IMAGE=${{ env.DOCKER_PROXY }}/library/eclipse-temurin:25-jdk-noble
           # 关闭 provenance 证明，避免部分客户端拉取时出现 unknown digest
           provenance: false
           # 使用 Actions 缓存加速 Maven 依赖层复用
