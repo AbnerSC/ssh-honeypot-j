@@ -4,7 +4,8 @@
 # 触发方式：
 #   - 推送 release-v 开头的 tag（如 release-v1.2.3）自动构建，
 #     推送 版本号（1.2.3）+ latest 标签
-#   - 支持在 Actions 页面手动触发（仅推送 latest）
+#   - 支持在 Actions 页面手动触发：选择 release-v 开头的 tag 时
+#     同样推送 版本号 + latest 标签；选择分支时仅推送 latest
 #
 # 推送目标：
 #   - Docker Hub（需在仓库 Settings -> Secrets 中配置：
@@ -31,12 +32,14 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      # 从 tag 解析版本号：release-v1.2.3 -> 1.2.3（手动触发时无版本号，仅推 latest）
+      # 从 tag 解析版本号：release-v1.2.3 -> 1.2.3
+      # 无论 tag 推送还是手动选择 tag 触发，只要 ref 以 release-v 开头即解析；
+      # 手动选择分支触发时无版本号，仅推 latest
       - name: 解析版本号
         id: version
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [[ "${GITHUB_REF_NAME}" == release-v* ]]; then
             TAG="${GITHUB_REF_NAME#release-v}"
             if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "::error::Tag 格式必须为 release-vX.Y.Z，实际为：${GITHUB_REF_NAME}"
@@ -59,7 +62,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # tag 推送：1.2.3、latest；手动触发：仅 latest
+      # release-v 开头的 tag（推送或手动选择）：1.2.3、latest；手动选择分支：仅 latest
       - name: 生成镜像标签与元数据
         id: meta
         uses: docker/metadata-action@v5
