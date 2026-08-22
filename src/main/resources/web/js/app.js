@@ -611,6 +611,7 @@ const VIEWS = {
             { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
             { key: 'method', label: '方法', render: (r) => '<span class="tag">' + esc(r.method) + '</span>' },
             { key: 'path', label: '路径', cls: 'mono cell', title: true },
+            { key: 'path_desc', label: '操作描述', render: (r) => r.path_desc ? esc(r.path_desc) : '-' },
             { key: 'query', label: '查询参数', cls: 'mono cell', title: true, render: (r) => r.query ? esc(r.query) : '-' },
             { key: 'req_body', label: '请求体', cls: 'mono cell', title: true, render: (r) => r.req_body ? esc(r.req_body) : '-' },
             { key: 'status', label: '状态码', render: (r) => r.status < 400 ? '<span class="tag green">' + r.status + '</span>' : '<span class="tag red">' + r.status + '</span>' },
