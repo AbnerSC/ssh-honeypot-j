@@ -181,7 +181,7 @@ services:
       - 5432:5432              # Postgre数据库端口
       - 6379:6379              # Redis数据库端口
       - 127.0.0.1:11800:8080   # Web控制台端口，建议使用nginx代理为https
-    mem_limit: 256m            # 内存限制，被持续攻击大约需要240MB
+    mem_limit: 300m            # 内存限制，被持续攻击大约需要240MB
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8080"]
       interval: 10s

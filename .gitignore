@@ -7,3 +7,4 @@ hostkey.ser
 *.iml
 .workbuddy/
 dependency-reduced-pom.xml
+/smoke

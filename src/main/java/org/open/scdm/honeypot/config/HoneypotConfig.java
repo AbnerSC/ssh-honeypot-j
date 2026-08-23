@@ -93,7 +93,7 @@ public class HoneypotConfig {
         public void setPort(int port) { this.port = port; }
     }
 
-    /** MySQL 蜜罐（模拟 MySQL 8.4，连接即返回 Access denied 并断开） */
+    /** MySQL 蜜罐（模拟 MySQL 8.4，握手捕获登录凭证后一律返回 Access denied 并断开；最大并发连接 20，超限返回 Too many connections） */
     public static class Mysql {
         private boolean enabled = true;
         private int port = 3306;

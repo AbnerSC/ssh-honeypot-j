@@ -13,9 +13,9 @@ telnet:
   enabled: true      # 是否启用 Telnet 服务
   port: 2323         # Telnet 监听端口
 
-# 数据库蜜罐：连接时立即返回默认的认证失败信息并断开连接，不做任何协议交互
+# 数据库蜜罐：MySQL 握手捕获登录凭证后拒绝；PostgreSQL/Redis 连接时立即返回默认认证失败并断开
 mysql:
-  enabled: true      # 是否启用 MySQL 蜜罐（模拟 8.4，连接即返回 Access denied 1045/28000）
+  enabled: true      # 是否启用 MySQL 蜜罐（模拟 8.4，握手捕获账号密码并记录后返回 Access denied 1045/28000；最大并发连接 20，超限返回 Too many connections 1040）
   port: 3306         # MySQL 监听端口
 
 postgresql:
