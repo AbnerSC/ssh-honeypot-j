@@ -13,17 +13,17 @@ telnet:
   enabled: true      # 是否启用 Telnet 服务
   port: 2323         # Telnet 监听端口
 
-# 数据库蜜罐：MySQL 握手捕获登录凭证后拒绝；PostgreSQL/Redis 连接时立即返回默认认证失败并断开
+# 数据库蜜罐：均先通过协议交互捕获登录凭证（账号/密码）记录后再返回认证失败；均有最大并发连接限制防资源耗尽
 mysql:
   enabled: true      # 是否启用 MySQL 蜜罐（模拟 8.4，握手捕获账号密码并记录后返回 Access denied 1045/28000；最大并发连接 20，超限返回 Too many connections 1040）
   port: 3306         # MySQL 监听端口
 
 postgresql:
-  enabled: true      # 是否启用 PostgreSQL 蜜罐（模拟 17，连接即返回 FATAL 28P01 认证失败）
+  enabled: true      # 是否启用 PostgreSQL 蜜罐（模拟 17，捕获账号明文密码并记录后返回 FATAL 28P01 认证失败；最大并发连接 20，超限返回 53300）
   port: 5432         # PostgreSQL 监听端口
 
 redis:
-  enabled: true      # 是否启用 Redis 蜜罐（模拟 7，连接即返回 WRONGPASS）
+  enabled: true      # 是否启用 Redis 蜜罐（模拟 7，捕获 AUTH 账号明文密码并记录后返回 WRONGPASS；最大并发连接 20，超限返回 max number of clients reached）
   port: 6379         # Redis 监听端口
 
 log:

@@ -105,7 +105,7 @@ public class HoneypotConfig {
         public void setPort(int port) { this.port = port; }
     }
 
-    /** PostgreSQL 蜜罐（模拟 PostgreSQL 17，连接即返回 password authentication failed 并断开） */
+    /** PostgreSQL 蜜罐（模拟 PostgreSQL 17，捕获登录凭证明文后一律返回 password authentication failed 并断开；最大并发连接 20） */
     public static class Postgresql {
         private boolean enabled = true;
         private int port = 5432;
@@ -117,7 +117,7 @@ public class HoneypotConfig {
         public void setPort(int port) { this.port = port; }
     }
 
-    /** Redis 蜜罐（模拟 Redis 7，连接即返回 WRONGPASS 并断开） */
+    /** Redis 蜜罐（模拟 Redis 7，捕获 AUTH 登录凭证明文后一律返回 WRONGPASS 并断开；最大并发连接 20） */
     public static class Redis {
         private boolean enabled = true;
         private int port = 6379;

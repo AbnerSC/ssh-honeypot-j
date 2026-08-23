@@ -101,7 +101,7 @@ public class Main {
             telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger, guard, hostname);
             telnetServer.start();
         }
-        // 数据库蜜罐：MySQL 先握手捕获登录凭证再拒绝；PostgreSQL/Redis 连接即返回默认认证失败并断开
+        // 数据库蜜罐：均通过协议交互捕获登录凭证（账号/密码）并记录，再一律返回认证失败后断开（含并发连接限流）
         if (config.getMysql().isEnabled()) {
             mysqlServer = new MySqlHoneypotServer(config.getMysql().getPort(), attackLogger);
             mysqlServer.start();
