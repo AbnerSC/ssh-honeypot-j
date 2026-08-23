@@ -8,6 +8,9 @@
 ## GitHub
 https://github.com/AbnerSC/ssh-honeypot-j.git
 
+[![GitHub Stars](https://img.shields.io/github/stars/AbnerSC/ssh-honeypot-j?style=flat&label=Stars)](https://github.com/AbnerSC/ssh-honeypot-j/stargazers)
+[![Docker Pulls](https://img.shields.io/docker/pulls/babyfly/ssh-honeypot-j?label=Docker%20Pulls)](https://hub.docker.com/r/babyfly/ssh-honeypot-j)
+
 基于 **Apache MINA SSHD** 实现 SSH 协议，原生 Socket 实现 Telnet 协议，
 内置伪装的 Ubuntu 22.04 虚拟文件系统与伪 Shell，
 支持 SSH / Telnet / MySQL / PostgreSQL / Redis 多协议诱捕，
