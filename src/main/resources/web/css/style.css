@@ -154,6 +154,17 @@ input, select, button { font: inherit; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn.primary { background: rgba(34, 211, 238, .16); border-color: var(--accent); color: var(--accent); }
 .btn.danger { background: rgba(248, 113, 113, .13); border-color: var(--red); color: var(--red); }
+/* 行内操作按钮（如“命令记录”）：主题色高亮，悬停发光 */
+.btn.cmd {
+    background: rgba(34, 211, 238, .12);
+    border-color: rgba(34, 211, 238, .55);
+    color: var(--accent);
+}
+.btn.cmd:hover {
+    background: rgba(34, 211, 238, .24);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px rgba(34, 211, 238, .3);
+}
 .btn.ghost { background: transparent; }
 .btn.sm { padding: 3px 10px; font-size: 12px; }
 .btn.block { width: 100%; padding: 10px; }
@@ -220,6 +231,9 @@ td.cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
     max-width: 92vw;
     box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
 }
+/* 宽弹窗（如会话命令记录），内容区超出高度时表格内部滚动 */
+.modal.wide { width: 760px; }
+.modal.wide .table-wrap { max-height: 55vh; }
 .modal-head { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .field { margin-bottom: 14px; }

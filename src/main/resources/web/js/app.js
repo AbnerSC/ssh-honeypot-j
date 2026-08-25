@@ -279,6 +279,9 @@ function tableView(cfg) {
                 body.innerHTML = d.rows.length
                     ? d.rows.map((row) => `<tr>${cfg.cols.map((c) => `<td${c.cls ? ` class="${c.cls}"` : ''}${c.title ? ` title="${esc(row[c.key])}"` : ''}>${c.render ? c.render(row) : esc(row[c.key])}</td>`).join('')}</tr>`).join('')
                     : `<tr><td colspan="${cfg.cols.length}" class="empty-row">暂无数据</td></tr>`;
+                // 行内操作按钮统一绑定（如会话表的“命令记录”）
+                body.querySelectorAll('button[data-cmd-session]').forEach((b) =>
+                    b.onclick = () => showSessionCommands(b.dataset.cmdSession));
                 document.getElementById('tv-pager').innerHTML = `
                     <span>共 ${d.total} 条</span>
                     <button class="btn sm" id="tv-prev" ${d.page <= 1 ? 'disabled' : ''}>上一页</button>
@@ -313,6 +316,54 @@ const protoFilter = () => ({
     params() { return { protocol: document.getElementById('f-proto').value }; }
 });
 const protoCell = (row) => `<span class="tag ${PROTOCOL_TAG[row.protocol] || 'gray'}">${esc(row.protocol)}</span>`;
+
+// ============================ 会话命令弹窗 ============================
+
+/** 弹窗展示某会话的全部命令记录（最多 200 条，超出提示） */
+async function showSessionCommands(sessionId) {
+    const mask = document.createElement('div');
+    mask.className = 'modal-mask';
+    mask.innerHTML = `
+        <div class="modal wide">
+            <div class="modal-head">会话命令记录 · <span class="mono">${esc(sessionId)}</span></div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th style="width: 180px;">时间</th>
+                        <th style="width: 120px;">用户名</th>
+                        <th>命令</th>
+                    </tr></thead>
+                    <tbody><tr><td colspan="3" class="loading">加载中…</td></tr></tbody>
+                </table>
+            </div>
+            <div class="modal-tip" id="cm-tip"></div>
+            <div class="modal-actions">
+                <button class="btn" id="cm-close">关闭</button>
+            </div>
+        </div>`;
+    document.body.appendChild(mask);
+    const close = () => mask.remove();
+    mask.querySelector('#cm-close').onclick = close;
+    mask.addEventListener('mousedown', (e) => { if (e.target === mask) close(); });
+    mask.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    const tbody = mask.querySelector('tbody');
+    try {
+        const r = await API.get('/api/commands?sessionId=' + encodeURIComponent(sessionId) + '&page=1&size=200');
+        const rows = r.data.rows;
+        tbody.innerHTML = rows.length
+            ? rows.map((c) => `<tr>
+                    <td>${esc(fmtTs(c.ts))}</td>
+                    <td class="mono">${esc(c.username || '-')}</td>
+                    <td class="mono cell" title="${esc(c.command)}">${esc(c.command)}</td>
+                </tr>`).join('')
+            : '<tr><td colspan="3" class="empty-row">该会话暂无命令记录</td></tr>';
+        if (r.data.total > rows.length) {
+            mask.querySelector('#cm-tip').textContent = `仅显示前 ${rows.length} 条，共 ${r.data.total} 条命令（可在“命令记录”页按会话筛选）`;
+        }
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="3" class="empty-row">${esc(e.message)}</td></tr>`;
+    }
+}
 
 // ============================ 用户管理 ============================
 
@@ -523,7 +574,8 @@ const VIEWS = {
             { key: 'src_port', label: '端口' },
             { key: 'opened_at', label: '开始时间', render: (r) => fmtTs(r.opened_at) },
             { key: 'closed_at', label: '结束时间', render: (r) => r.closed_at ? fmtTs(r.closed_at) : '<span class="tag red">异常断开</span>' },
-            { key: 'duration_ms', label: '时长', render: (r) => r.duration_ms == null ? '-' : (r.duration_ms / 1000).toFixed(1) + 's' }
+            { key: 'duration_ms', label: '时长', render: (r) => r.duration_ms == null ? '-' : (r.duration_ms / 1000).toFixed(1) + 's' },
+            { key: '_op', label: '操作', render: (r) => `<button class="btn sm cmd" data-cmd-session="${esc(r.session_id)}">❯ 命令记录</button>` }
         ]
     }),
 
@@ -553,6 +605,7 @@ const VIEWS = {
     commands: tableView({
         api: '/api/commands',
         filters: [
+            textFilter('f-sid', '会话 ID', 'sessionId', 170),
             textFilter('f-ip', '来源 IP', 'srcIp'),
             textFilter('f-user', '用户名', 'username'),
             textFilter('f-kw', '命令关键字', 'keyword', 200),

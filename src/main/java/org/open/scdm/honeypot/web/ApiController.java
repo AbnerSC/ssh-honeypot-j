@@ -63,6 +63,7 @@ public class ApiController {
                 ctx.queryParam("srcIp"), ctx.queryParam("username"), ctx.queryParam("protocol"),
                 boolParam(ctx, "success"), longParam(ctx, "start"), longParam(ctx, "end"), page(ctx), size(ctx))));
         app.get("/api/commands", ctx -> ok(ctx, logs.commands(
+                ctx.queryParam("sessionId"),
                 ctx.queryParam("srcIp"), ctx.queryParam("username"), ctx.queryParam("keyword"),
                 longParam(ctx, "start"), longParam(ctx, "end"), page(ctx), size(ctx))));
         app.get("/api/downloads", ctx -> ok(ctx, logs.downloads(

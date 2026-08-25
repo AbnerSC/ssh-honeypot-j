@@ -159,10 +159,11 @@ public class LogRepository implements AutoCloseable {
         return pageQuery("auth_attempts", w, page, size, "ORDER BY ts_epoch_ms DESC, id DESC");
     }
 
-    /** 命令执行明细（分页，支持来源 IP / 用户名 / 命令行关键字 / 时间范围过滤） */
-    public Map<String, Object> commands(String srcIp, String username, String keyword,
+    /** 命令执行明细（分页，支持会话编号 / 来源 IP / 用户名 / 命令行关键字 / 时间范围过滤） */
+    public Map<String, Object> commands(String sessionId, String srcIp, String username, String keyword,
                                         Long start, Long end, int page, int size) throws SQLException {
         Where w = new Where();
+        w.eq("session_id", sessionId);
         w.like("src_ip", srcIp);
         w.eq("username", username);
         w.like("command", keyword);
