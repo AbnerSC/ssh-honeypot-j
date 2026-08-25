@@ -208,17 +208,21 @@ public class AuditLogRepository implements AutoCloseable {
 
         String sql = "SELECT * FROM sys_audit_log" + where
                 + " ORDER BY epoch_ms DESC, id DESC LIMIT ? OFFSET ?";
-        List<Map<String, Object>> rows = new ArrayList<>();
+        List<Map<String, Object>> rows = new ArrayList<>(Math.min(size, 200));
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             bind(ps, params);
             ps.setInt(params.size() + 1, size);
             ps.setLong(params.size() + 2, (long) (page - 1) * size);
             try (ResultSet rs = ps.executeQuery()) {
-                int n = rs.getMetaData().getColumnCount();
+                // 元数据与列标签只取一次，避免原先每行重复调用 rs.getMetaData()
+                java.sql.ResultSetMetaData md = rs.getMetaData();
+                int n = md.getColumnCount();
+                String[] labels = new String[n];
+                for (int i = 0; i < n; i++) labels[i] = md.getColumnLabel(i + 1);
                 while (rs.next()) {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    for (int i = 1; i <= n; i++) {
-                        row.put(rs.getMetaData().getColumnLabel(i), rs.getObject(i));
+                    Map<String, Object> row = new LinkedHashMap<>(n * 2);
+                    for (int i = 0; i < n; i++) {
+                        row.put(labels[i], rs.getObject(i + 1));
                     }
                     rows.add(row);
                 }
@@ -255,7 +259,8 @@ public class AuditLogRepository implements AutoCloseable {
 
     private static void bind(PreparedStatement ps, List<Object> params) throws SQLException {
         for (int i = 0; i < params.size(); i++) {
-            ps.setString(i + 1, String.valueOf(params.get(i)));
+            // 保留原始类型（String / Long）绑定，交由驱动处理，避免全部退化字符串增加转换开销
+            ps.setObject(i + 1, params.get(i));
         }
     }
 

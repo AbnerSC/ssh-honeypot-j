@@ -2,6 +2,7 @@ package org.open.scdm.honeypot.mysql;
 
 import org.open.scdm.honeypot.log.AttackLogger;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.EOFException;
@@ -61,6 +62,15 @@ public class MySqlHoneypotServer {
             0x4d, 0x1f, 0x08, 0x6c, 0x55, 0x41, 0x70, 0x2e,
             0x36, 0x0d, 0x59, 0x18};
 
+    /**
+     * 握手包完整协议帧（含 3 字节长度 + 序号 0 包头）与连接数超限错误包：
+     * 内容与连接无关，进程启动时构造一次复用。蜜罐面对海量扫描连接时，
+     * 每个连接都在重复构造同一份字节序列，缓存可显著减少 CPU 与 GC 压力。
+     */
+    private static final byte[] HANDSHAKE = withPacketHeader(handshake(), 0);
+    private static final byte[] TOO_MANY_CONNECTIONS = withPacketHeader(
+            errBody(ER_TOO_MANY_CONNECTIONS, SQLSTATE_TOO_MANY_CONNECTIONS, "Too many connections"), 0);
+
     private final int port;
     private final AttackLogger logger;
     /** 虚拟线程执行器：每个连接一条虚拟线程 */
@@ -109,7 +119,8 @@ public class MySqlHoneypotServer {
         if (activeConnections.incrementAndGet() > MAX_CONNECTIONS) {
             activeConnections.decrementAndGet();
             try (socket) {
-                sendPacket(socket.getOutputStream(), 0, tooManyConnections());
+                socket.getOutputStream().write(TOO_MANY_CONNECTIONS);
+                socket.getOutputStream().flush();
             } catch (IOException e) {
                 // 客户端提前断开：静默忽略
             } finally {
@@ -119,7 +130,9 @@ public class MySqlHoneypotServer {
         }
         try (socket) {
             socket.setSoTimeout(READ_TIMEOUT_MS);
-            sendPacket(socket.getOutputStream(), 0, handshake());
+            OutputStream out = socket.getOutputStream();
+            out.write(HANDSHAKE);
+            out.flush();
             byte[] resp = readPacket(socket);
             String[] cred = parseHandshakeResponse(resp);
             if (cred != null) {
@@ -129,7 +142,7 @@ public class MySqlHoneypotServer {
                 logger.authAttempt(sessionId, "mysql", ip, user,
                         usingPassword ? cred[1] : "(空)", false);
             }
-            sendPacket(socket.getOutputStream(), 2, accessDenied(user, ip, usingPassword));
+            sendPacket(out, 2, accessDenied(user, ip, usingPassword));
         } catch (SocketTimeoutException | EOFException e) {
             // 扫描器未发送登录报文或客户端提前断开：静默忽略，不发错误包（协议报文都算不上）
         } catch (IOException e) {
@@ -140,17 +153,27 @@ public class MySqlHoneypotServer {
         }
     }
 
-    /** 构造 ERR 包：ERROR 1040 (08004) Too many connections（MySQL 服务端达到最大连接数时的标准响应） */
-    private static byte[] tooManyConnections() {
-        byte[] msg = "Too many connections".getBytes(StandardCharsets.US_ASCII);
-        ByteArrayOutputStream b = new ByteArrayOutputStream(16 + msg.length);
+    /** 构造 ERR 包主体：ERROR 1040 (08004) Too many connections（MySQL 服务端达到最大连接数时的标准响应） */
+    private static byte[] errBody(int code, String sqlstate, String msg) {
+        ByteArrayOutputStream b = new ByteArrayOutputStream(16 + msg.length());
         b.write(0xFF);                                          // ERR 包头
-        b.write(ER_TOO_MANY_CONNECTIONS & 0xFF);                // 错误码小端
-        b.write((ER_TOO_MANY_CONNECTIONS >> 8) & 0xFF);
+        b.write(code & 0xFF);                                   // 错误码小端
+        b.write((code >> 8) & 0xFF);
         b.write('#');                                           // SQLSTATE 标记
-        writeBytes(b, SQLSTATE_TOO_MANY_CONNECTIONS.getBytes(StandardCharsets.US_ASCII));
-        writeBytes(b, msg);
+        writeBytes(b, sqlstate.getBytes(StandardCharsets.US_ASCII));
+        writeBytes(b, msg.getBytes(StandardCharsets.US_ASCII));
         return b.toByteArray();
+    }
+
+    /** 拼接 3 字节长度 + 1 字节序号的 MySQL 包头 */
+    private static byte[] withPacketHeader(byte[] payload, int seq) {
+        byte[] pkt = new byte[4 + payload.length];
+        pkt[0] = (byte) (payload.length & 0xFF);
+        pkt[1] = (byte) ((payload.length >> 8) & 0xFF);
+        pkt[2] = (byte) ((payload.length >> 16) & 0xFF);
+        pkt[3] = (byte) seq;
+        System.arraycopy(payload, 0, pkt, 4, payload.length);
+        return pkt;
     }
 
     /**
@@ -183,7 +206,8 @@ public class MySqlHoneypotServer {
 
     /** 读取一个完整 MySQL 包并返回负载；报文不合法（超大长度）时返回空数组 */
     private static byte[] readPacket(Socket socket) throws IOException {
-        DataInputStream in = new DataInputStream(socket.getInputStream());
+        // 缓冲读取：包头 4 字节 + 负载，避免逐字节底层读
+        DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream(), 1024));
         int len = in.readUnsignedByte() | (in.readUnsignedByte() << 8) | (in.readUnsignedByte() << 16);
         in.readUnsignedByte(); // 序号（不校验）
         if (len <= 0 || len > 0x10000) return new byte[0];

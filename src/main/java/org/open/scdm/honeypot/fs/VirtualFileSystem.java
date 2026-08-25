@@ -60,16 +60,13 @@ public class VirtualFileSystem {
         if (path == null || path.isEmpty() || path.equals(".")) {
             return resolve(cwd, cwd);
         }
-        String combined = path.startsWith("/") ? path : cwd + "/" + path;
-        String[] parts = combined.split("/");
-        Deque<String> stack = new ArrayDeque<>();
-        for (String p : parts) {
-            if (p.isEmpty() || p.equals(".")) continue;
-            if (p.equals("..")) {
-                if (!stack.isEmpty()) stack.pollLast();
-            } else {
-                stack.offerLast(p);
-            }
+        // 手动分段扫描：避免 cwd+"/"+path 拼接与 split 产生的中间数组（高频路径，ls/cd/cat 等每命令多次调用）
+        Deque<String> stack = new ArrayDeque<>(8);
+        if (path.startsWith("/")) {
+            collectSegments(stack, path, 1);
+        } else {
+            collectSegments(stack, cwd, 0);
+            collectSegments(stack, path, 0);
         }
         VNode node = root;
         for (String name : stack) {
@@ -81,18 +78,41 @@ public class VirtualFileSystem {
 
     /** 规范化路径，返回以 / 开头的绝对路径 */
     public String normalize(String cwd, String path) {
-        String combined = (path == null || path.isEmpty()) ? cwd : (path.startsWith("/") ? path : cwd + "/" + path);
-        Deque<String> stack = new ArrayDeque<>();
-        for (String p : combined.split("/")) {
-            if (p.isEmpty() || p.equals(".")) continue;
-            if (p.equals("..")) {
-                if (!stack.isEmpty()) stack.pollLast();
-            } else {
-                stack.offerLast(p);
-            }
+        if (path == null || path.isEmpty()) {
+            path = cwd;
+        }
+        Deque<String> stack = new ArrayDeque<>(8);
+        if (path.startsWith("/")) {
+            collectSegments(stack, path, 1);
+        } else {
+            collectSegments(stack, cwd, 0);
+            collectSegments(stack, path, 0);
         }
         if (stack.isEmpty()) return "/";
-        return "/" + String.join("/", stack);
+        StringBuilder sb = new StringBuilder(stack.size() * 8);
+        for (String seg : stack) sb.append('/').append(seg);
+        return sb.toString();
+    }
+
+    /**
+     * 将字符串中由 / 分隔的路径段压入栈：忽略空段与 "."，遇 ".." 弹出栈顶段。
+     * 与 {@code String.split("/")} 后逐段入栈的语义完全一致，但不产生中间数组。
+     */
+    private static void collectSegments(Deque<String> stack, String s, int from) {
+        int n = s.length();
+        int i = from;
+        while (i < n) {
+            if (s.charAt(i) == '/') { i++; continue; }
+            int end = s.indexOf('/', i);
+            if (end < 0) end = n;
+            String seg = s.substring(i, end);
+            if (seg.equals("..")) {
+                if (!stack.isEmpty()) stack.pollLast();
+            } else if (!seg.equals(".")) {
+                stack.offerLast(seg);
+            }
+            i = end + 1;
+        }
     }
 
     /* ------------------------------------------------------------------ */

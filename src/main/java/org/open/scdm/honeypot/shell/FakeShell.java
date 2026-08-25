@@ -18,6 +18,13 @@ import java.util.function.Consumer;
 public class FakeShell {
     private static final byte CR = 13, LF = 10, BS = 8, DEL = 127, CTRL_C = 3, CTRL_D = 4, ESC = 27;
     private static final int IAC = 0xFF, SB = 0xFA, SE = 0xF0;
+    /** 登录横幅：内容固定，编译期拼接一次复用，避免每会话重复构造 */
+    private static final String BANNER =
+            "Welcome to Ubuntu 22.04.3 LTS (GNU/Linux 5.15.0-91-generic x86_64)\r\n\r\n" +
+            " * Documentation:  https://help.ubuntu.com\r\n" +
+            " * Management:     https://landscape.canonical.com\r\n" +
+            " * Support:        https://ubuntu.com/advantage\r\n\r\n" +
+            "Last login: Mon Aug 11 06:25:01 2026 from 203.0.113.44\r\n";
 
     private final InputStream in;
     private final OutputStream out;
@@ -59,7 +66,7 @@ public class FakeShell {
                 pushHistory(line);
                 String result = processor.execute(state, line);
                 if (CommandProcessor.EXIT_SIGNAL.equals(result)) break;
-                write(result.replace("\u0000NONL", ""));
+                write(stripNonl(result));
             }
         } catch (IOException e) {
             // 攻击者断开连接，正常情况
@@ -83,11 +90,7 @@ public class FakeShell {
     }
 
     private void printBanner() throws IOException {
-        write("Welcome to Ubuntu 22.04.3 LTS (GNU/Linux 5.15.0-91-generic x86_64)\r\n\r\n" +
-              " * Documentation:  https://help.ubuntu.com\r\n" +
-              " * Management:     https://landscape.canonical.com\r\n" +
-              " * Support:        https://ubuntu.com/advantage\r\n\r\n" +
-              "Last login: Mon Aug 11 06:25:01 2026 from 203.0.113.44\r\n");
+        write(BANNER);
     }
 
     /* ------------------------------------------------------------------ */
@@ -191,9 +194,35 @@ public class FakeShell {
 
     private void write(String s) throws IOException {
         if (s == null || s.isEmpty()) return;
-        // 终端需要 \r\n
-        String normalized = s.replace("\r\n", "\n").replace("\n", "\r\n");
-        out.write(normalized.getBytes(StandardCharsets.UTF_8));
+        // 终端需要 \r\n：单遍扫描规范化，避免 replace 链产生的中间字符串（所有命令输出都走此路径）
+        int n = s.length();
+        StringBuilder sb = null;
+        int plainStart = 0;
+        for (int i = 0; i < n; i++) {
+            char c = s.charAt(i);
+            if (c == '\r') {
+                if (sb == null) sb = new StringBuilder(n + 8);
+                sb.append(s, plainStart, i);
+                if (i + 1 < n && s.charAt(i + 1) == '\n') {
+                    sb.append("\r\n");
+                    i++;
+                } else {
+                    sb.append('\r'); // 孤立 CR 原样保留
+                }
+                plainStart = i + 1;
+            } else if (c == '\n') {
+                if (sb == null) sb = new StringBuilder(n + 8);
+                sb.append(s, plainStart, i);
+                sb.append("\r\n");
+                plainStart = i + 1;
+            }
+        }
+        if (sb == null) {
+            out.write(s.getBytes(StandardCharsets.UTF_8)); // 快速路径：无换行无需拷贝
+        } else {
+            sb.append(s, plainStart, n);
+            out.write(sb.toString().getBytes(StandardCharsets.UTF_8));
+        }
         out.flush();
     }
 
@@ -205,6 +234,11 @@ public class FakeShell {
     private void writeRawByte(int b) throws IOException {
         out.write(b);
         out.flush();
+    }
+
+    /** 去除 echo -n 的 NONL 标记：大多数命令输出不含该标记，仅命中时才拷贝 */
+    private static String stripNonl(String s) {
+        return s.indexOf("\u0000NONL") < 0 ? s : s.replace("\u0000NONL", "");
     }
 
     /** 记录已完成的命令供历史导航使用 */

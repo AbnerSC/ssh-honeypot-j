@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 /**
@@ -34,12 +35,16 @@ public class IpLocator implements AutoCloseable {
     /** jar 内置 xdb 库资源路径：随 fat-jar 打包，外部文件缺失时兜底加载 */
     private static final String BUILTIN_V4 = "db/ip2region_v4.xdb";
     private static final String BUILTIN_V6 = "db/ip2region_v6.xdb";
+    /** 地域输出字段索引：国家、省份、城市（区域字段不用），避免每次检索分配临时数组 */
+    private static final int[] REGION_IDX = {0, 2, 3};
 
     /** ip2region v4+v6 统一查询服务；两个库文件均不可用时为 null（降级为空实现） */
     private final Ip2Region searcher;
 
     /** IP -> 归属地结果缓存；未命中库的 IP 缓存空串哨兵，避免重复检索 */
     private final Map<String, String> cache = new ConcurrentHashMap<>();
+    /** 缓存条目计数：替代 cache.size() 的 O(n) 全表遍历用于容量判定（map 从未删减，计数只增） */
+    private final AtomicInteger cacheCount = new AtomicInteger();
 
     private IpLocator(Ip2Region searcher) {
         this.searcher = searcher;
@@ -145,8 +150,10 @@ public class IpLocator implements AutoCloseable {
         String cached = cache.get(key);
         if (cached != null) return cached.isEmpty() ? null : cached;
         String location = search(key);
-        if (cache.size() < CACHE_LIMIT) {
-            cache.put(key, location == null ? "" : location);
+        // putIfAbsent 保证并发下同一 key 只计数一次；计数达上限后仅查询不缓存，防异常流量撑爆内存
+        if (cacheCount.get() < CACHE_LIMIT
+                && cache.putIfAbsent(key, location == null ? "" : location) == null) {
+            cacheCount.incrementAndGet();
         }
         return location;
     }
@@ -169,7 +176,7 @@ public class IpLocator implements AutoCloseable {
         String[] parts = region.split("\\|", -1);
         StringBuilder sb = new StringBuilder();
         String last = null;
-        for (int idx : new int[]{0, 2, 3}) { // 国家、省份、城市（区域字段不用）
+        for (int idx : REGION_IDX) { // 国家、省份、城市（区域字段不用）
             if (idx >= parts.length) break;
             String v = parts[idx].trim();
             if (v.isEmpty() || "0".equals(v) || v.equals(last)) continue;

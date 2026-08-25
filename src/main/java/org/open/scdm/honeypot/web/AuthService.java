@@ -6,6 +6,7 @@ import io.javalin.http.UnauthorizedResponse;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
 /**
@@ -23,10 +24,16 @@ public class AuthService {
     private static final int MAX_ATTEMPTS = 5;
     /** 登录失败锁定时长（毫秒） */
     private static final long LOCK_MILLIS = 15 * 60 * 1000L;
+    /** 失败记录表容量上限：超限后不再为无记录的新 IP 计数，防伪造海量来源 IP 撑爆内存 */
+    private static final int MAX_FAILURE_RECORDS = 65536;
+    /** 过期失败记录惰性清理的最小间隔（毫秒）：仅在登录失败路径触发，无需后台线程 */
+    private static final long CLEANUP_INTERVAL_MILLIS = 5 * 60 * 1000L;
 
     private final UserRepository users;
     /** 来源 IP -> 登录失败记录（仅内存，重启清零，对管理端爆破防护足够） */
     private final ConcurrentHashMap<String, long[]> failures = new ConcurrentHashMap<>();
+    /** 上次失败记录清理时间戳（毫秒），配合惰性清理使用 */
+    private final AtomicLong lastCleanupMillis = new AtomicLong(System.currentTimeMillis());
 
     public AuthService(UserRepository users) {
         this.users = users;
@@ -51,11 +58,7 @@ public class AuthService {
                 && UserRepository.Passwords.verify(password == null ? "" : password,
                         (String) user.get("passwordHash"));
         if (!ok) {
-            failures.compute(ip, (k, old) -> {
-                long now = System.currentTimeMillis();
-                if (old == null || now >= old[1]) return new long[]{1, now + LOCK_MILLIS};
-                return new long[]{old[0] + 1, old[1]};
-            });
+            recordFailure(ip);
             LOG.warning("Web 控制台登录失败: ip=" + ip + " user=" + username);
             return Map.of("ok", false, "error", "用户名或密码错误");
         }
@@ -63,6 +66,29 @@ public class AuthService {
         users.recordLogin(((Number) user.get("id")).longValue());
         user.remove("passwordHash");
         return Map.of("ok", true, "user", user);
+    }
+
+    /** 记录一次登录失败：计数 +1 或开启新窗口；表满时仅对已有记录的 IP 继续计数 */
+    private void recordFailure(String ip) {
+        if (failures.get(ip) == null && failures.mappingCount() >= MAX_FAILURE_RECORDS) {
+            return; // 记录表已满且无该 IP 条目：放弃计数，仅影响锁定精度，不影响认证正确性
+        }
+        failures.compute(ip, (k, old) -> {
+            long now = System.currentTimeMillis();
+            if (old == null || now >= old[1]) return new long[]{1, now + LOCK_MILLIS};
+            return new long[]{old[0] + 1, old[1]};
+        });
+        cleanupExpired();
+    }
+
+    /** 惰性清理：间隔内至多执行一次，移除已过锁定窗口的失败记录，防长期运行内存无限增长 */
+    private void cleanupExpired() {
+        long now = System.currentTimeMillis();
+        long prev = lastCleanupMillis.get();
+        if (now - prev < CLEANUP_INTERVAL_MILLIS || !lastCleanupMillis.compareAndSet(prev, now)) {
+            return;
+        }
+        failures.entrySet().removeIf(e -> now >= e.getValue()[1]);
     }
 
     /** 登录成功时写入会话（会话不存在时先创建；已存在则换 ID 防会话固定攻击）。

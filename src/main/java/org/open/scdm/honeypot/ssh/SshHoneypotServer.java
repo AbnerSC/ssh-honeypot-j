@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
@@ -45,8 +46,8 @@ public class SshHoneypotServer {
     private final String hostname;
     private SshServer sshd;
 
-    /** sessionId -> 登录用户名（auth 阶段写入，shell 阶段读取） */
-    private final Map<String, String> sessionUsers = new ConcurrentHashMap<>();
+    /** sessionId(ioSessionId) -> 登录用户名（auth 阶段写入，shell 阶段读取）；用 long 键避免每次 String 装箱与哈希开销 */
+    private final Map<Long, String> sessionUsers = new ConcurrentHashMap<>();
 
     public SshHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard, String hostname) {
         this.port = port;
@@ -103,8 +104,8 @@ public class SshHoneypotServer {
         if (sshd != null) sshd.stop(true);
     }
 
-    private String sessionKey(Session session) {
-        return String.valueOf(session.getIoSession().getId());
+    private long sessionKey(Session session) {
+        return session.getIoSession().getId();
     }
 
     private String clientIp(Session session) {
@@ -203,7 +204,10 @@ public class SshHoneypotServer {
                     SessionState state = new SessionState(logger.newSessionId(), ip, username, fs, hostname);
                     String result = processor.execute(state, command);
                     if (!CommandProcessor.EXIT_SIGNAL.equals(result) && result != null) {
-                        out.write(result.replace("\u0000NONL", "").getBytes());
+                        // 明确使用 UTF-8（避免平台默认编码），且仅含 NONL 标记时才做拷贝
+                        String payload = result.indexOf("\u0000NONL") < 0
+                                ? result : result.replace("\u0000NONL", "");
+                        out.write(payload.getBytes(StandardCharsets.UTF_8));
                         out.flush();
                     }
                 } catch (Exception ignored) {

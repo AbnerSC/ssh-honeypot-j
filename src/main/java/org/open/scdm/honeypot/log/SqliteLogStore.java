@@ -8,10 +8,6 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 
 /**
  * SQLite 攻击日志持久化存储：将 JSONL 文件中的同一份数据再结构化保存一份，
@@ -31,8 +27,6 @@ import java.time.format.DateTimeFormatter;
  * 共享单个 Connection 是安全的；WAL 模式允许 Web 端并发只读而不阻塞写入。
  */
 public class SqliteLogStore implements AutoCloseable {
-
-    private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
     /** 建表与建索引语句（幂等）；数据库版本通过 user_version 管理，便于以后迁移 */
     private static final String[] SCHEMA = {
@@ -168,30 +162,30 @@ public class SqliteLogStore implements AutoCloseable {
                 "INSERT INTO ip_locks(ts, ts_epoch_ms, src_ip, locked_until, location) VALUES(?,?,?,?,?)");
     }
 
-    public void recordSessionOpen(LocalDateTime ts, String sessionId, String protocol,
+    public void recordSessionOpen(String ts, long epochMs, String sessionId, String protocol,
                                   String ip, int port, String location) throws SQLException {
         insertSession.setString(1, sessionId);
         insertSession.setString(2, protocol);
         insertSession.setString(3, ip);
         insertSession.setInt(4, port);
-        insertSession.setString(5, ts.format(TS));
-        insertSession.setLong(6, toEpochMs(ts));
+        insertSession.setString(5, ts);
+        insertSession.setLong(6, epochMs);
         insertSession.setString(7, location);
         insertSession.executeUpdate();
     }
 
-    public void recordSessionClose(LocalDateTime ts, String sessionId, long durationMs) throws SQLException {
-        closeSession.setString(1, ts.format(TS));
+    public void recordSessionClose(String ts, String sessionId, long durationMs) throws SQLException {
+        closeSession.setString(1, ts);
         closeSession.setLong(2, durationMs);
         closeSession.setString(3, sessionId);
         closeSession.executeUpdate();
     }
 
-    public void recordAuthAttempt(LocalDateTime ts, String sessionId, String protocol, String ip,
+    public void recordAuthAttempt(String ts, long epochMs, String sessionId, String protocol, String ip,
                                   String username, String password, boolean success,
                                   String location) throws SQLException {
-        insertAuth.setString(1, ts.format(TS));
-        insertAuth.setLong(2, toEpochMs(ts));
+        insertAuth.setString(1, ts);
+        insertAuth.setLong(2, epochMs);
         insertAuth.setString(3, sessionId);
         insertAuth.setString(4, protocol);
         insertAuth.setString(5, ip);
@@ -202,10 +196,10 @@ public class SqliteLogStore implements AutoCloseable {
         insertAuth.executeUpdate();
     }
 
-    public void recordCommand(LocalDateTime ts, String sessionId, String ip,
+    public void recordCommand(String ts, long epochMs, String sessionId, String ip,
                               String username, String cmdline, String location) throws SQLException {
-        insertCommand.setString(1, ts.format(TS));
-        insertCommand.setLong(2, toEpochMs(ts));
+        insertCommand.setString(1, ts);
+        insertCommand.setLong(2, epochMs);
         insertCommand.setString(3, sessionId);
         insertCommand.setString(4, ip);
         insertCommand.setString(5, username);
@@ -214,10 +208,10 @@ public class SqliteLogStore implements AutoCloseable {
         insertCommand.executeUpdate();
     }
 
-    public void recordDownload(LocalDateTime ts, String sessionId, String ip,
+    public void recordDownload(String ts, long epochMs, String sessionId, String ip,
                                String username, String url, String location) throws SQLException {
-        insertDownload.setString(1, ts.format(TS));
-        insertDownload.setLong(2, toEpochMs(ts));
+        insertDownload.setString(1, ts);
+        insertDownload.setLong(2, epochMs);
         insertDownload.setString(3, sessionId);
         insertDownload.setString(4, ip);
         insertDownload.setString(5, username);
@@ -226,20 +220,15 @@ public class SqliteLogStore implements AutoCloseable {
         insertDownload.executeUpdate();
     }
 
-    public void recordIpLocked(LocalDateTime ts, String ip, long untilMillis,
+    /** until 文本已由调用方按同一时间格式（TS）生成，避免本方法重复做时区换算 */
+    public void recordIpLocked(String ts, long epochMs, String ip, String until,
                                String location) throws SQLException {
-        String until = LocalDateTime.ofInstant(Instant.ofEpochMilli(untilMillis),
-                ZoneId.systemDefault()).format(TS);
-        insertIpLock.setString(1, ts.format(TS));
-        insertIpLock.setLong(2, toEpochMs(ts));
+        insertIpLock.setString(1, ts);
+        insertIpLock.setLong(2, epochMs);
         insertIpLock.setString(3, ip);
         insertIpLock.setString(4, until);
         insertIpLock.setString(5, location);
         insertIpLock.executeUpdate();
-    }
-
-    private static long toEpochMs(LocalDateTime ts) {
-        return ts.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 
     @Override

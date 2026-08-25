@@ -201,10 +201,12 @@ public class UserRepository implements AutoCloseable {
         private static final int ITERATIONS = 210_000;
         private static final int SALT_BYTES = 16;
         private static final int KEY_BITS = 256;
+        /** 盐生成器单例：SecureRandom 实例化需从系统熵源初始化，复用避免每次哈希重建 */
+        private static final SecureRandom RANDOM = new SecureRandom();
 
         public static String hash(String password) {
             byte[] salt = new byte[SALT_BYTES];
-            new SecureRandom().nextBytes(salt);
+            RANDOM.nextBytes(salt);
             byte[] key = pbkdf2(password.toCharArray(), salt, ITERATIONS);
             return "pbkdf2-sha256$" + ITERATIONS + "$"
                     + Base64.getEncoder().encodeToString(salt) + "$"

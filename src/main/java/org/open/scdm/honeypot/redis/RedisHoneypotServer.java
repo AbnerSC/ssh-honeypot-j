@@ -2,6 +2,7 @@ package org.open.scdm.honeypot.redis;
 
 import org.open.scdm.honeypot.log.AttackLogger;
 
+import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
@@ -117,7 +118,8 @@ public class RedisHoneypotServer {
         }
         try (socket) {
             socket.setSoTimeout(READ_TIMEOUT_MS);
-            DataInputStream in = new DataInputStream(socket.getInputStream());
+            // 缓冲读取：RESP 逐字节/逐长度字段解析，避免每字节一次底层系统调用
+            DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream(), 1024));
             OutputStream out = socket.getOutputStream();
             // 诱导提交凭证：非认证命令按真实 Redis 回 -NOAUTH，等待客户端提交 AUTH
             for (int i = 0; i < MAX_COMMANDS; i++) {

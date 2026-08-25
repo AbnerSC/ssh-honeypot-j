@@ -7,16 +7,25 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Pattern;
 
 /**
  * 伪 Shell 命令解释器。
  * 接收攻击者输入的一行命令，返回以假乱真的输出；所有危险行为仅记录不执行。
  */
 public class CommandProcessor {
-    private static final Random RANDOM = new Random();
     private final AttackLogger logger;
     /** 伪装主机名，用于 uname/hostname/env/journalctl 等命令输出 */
     private final String hostname;
+
+    /** 命令序列分隔符（; 与 &&）：预编译复用，避免每条命令重复编译正则 */
+    private static final Pattern SEQ_SPLIT = Pattern.compile(";|&&");
+    /** 时间格式化器静态复用：DateTimeFormatter 构造开销可观，每条命令输出都新建会造成无谓浪费 */
+    private static final DateTimeFormatter FMT_TIME_HMS = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter FMT_TIME_HM = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter FMT_DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter FMT_CTIME = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss 'UTC' yyyy", Locale.ENGLISH);
 
     /** exit/logout 时返回的标记 */
     public static final String EXIT_SIGNAL = "\u0000__EXIT__";
@@ -37,11 +46,12 @@ public class CommandProcessor {
 
         StringBuilder out = new StringBuilder();
         // 先按 ; 和 && 拆分成命令序列（蜜罐场景下足够）
-        for (String segment : line.split(";|&&")) {
+        for (String segment : SEQ_SPLIT.split(line)) {
             segment = segment.trim();
             if (segment.isEmpty()) continue;
             // 管道：只执行第一个命令，忽略后续（多数 bot 命令用不到管道结果）
-            String first = segment.split("\\|", 2)[0].trim();
+            int pipe = segment.indexOf('|');
+            String first = (pipe < 0 ? segment : segment.substring(0, pipe)).trim();
             String result = runSingle(st, first);
             if (EXIT_SIGNAL.equals(result)) return EXIT_SIGNAL;
             if (!result.isEmpty()) {
@@ -284,9 +294,9 @@ public class CommandProcessor {
         }
     }
 
-    /** [min, max] 区间内的随机毫秒数 */
+    /** [min, max] 区间内的随机毫秒数（ThreadLocalRandom：无共享 Random 的锁竞争） */
     private long between(long min, long max) {
-        return min + (max <= min ? 0 : RANDOM.nextLong(max - min + 1));
+        return max <= min ? min : ThreadLocalRandom.current().nextLong(min, max + 1);
     }
 
     /** 按命令类型给出模拟耗时（毫秒），区间随机以避免节奏过于机械 */
@@ -565,17 +575,17 @@ public class CommandProcessor {
     }
 
     private String w(SessionState st) {
-        return " " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) +
+        return " " + LocalDateTime.now().format(FMT_TIME_HMS) +
                " up 47 days,  3:12,  1 user,  load average: 0.08, 0.03, 0.01\n" +
                "USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT\n" +
                st.username + "   pts/0    " + st.ip + "     " +
-               LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm")) +
+               LocalDateTime.now().format(FMT_TIME_HM) +
                "    0.00s  0.02s  0.00s w";
     }
 
     private String uptime() {
-        double load = RANDOM.nextDouble(0.01, 0.3);
-        return " " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) +
+        double load = ThreadLocalRandom.current().nextDouble(0.01, 0.3);
+        return " " + LocalDateTime.now().format(FMT_TIME_HMS) +
                " up 47 days,  3:12,  1 user,  load average: " +
                String.format("%.2f, %.2f, %.2f", load, load * 0.8, load * 0.6);
     }
@@ -601,7 +611,7 @@ public class CommandProcessor {
     }
 
     private String top() {
-        return "top - " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) +
+        return "top - " + LocalDateTime.now().format(FMT_TIME_HMS) +
                " up 47 days,  3:12,  1 user,  load average: 0.08, 0.03, 0.01\n" +
                "Tasks:  97 total,   1 running,  96 sleeping,   0 stopped,   0 zombie\n" +
                "%Cpu(s):  1.3 us,  0.7 sy,  0.0 ni, 97.8 id,  0.2 wa,  0.0 hi,  0.0 si,  0.0 st";
@@ -671,10 +681,10 @@ public class CommandProcessor {
             try {
                 return LocalDateTime.now().format(DateTimeFormatter.ofPattern(fmt, Locale.ENGLISH));
             } catch (Exception e) {
-                return LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss 'UTC' yyyy", Locale.ENGLISH));
+                return LocalDateTime.now().format(FMT_CTIME);
             }
         }
-        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss 'UTC' yyyy", Locale.ENGLISH));
+        return LocalDateTime.now().format(FMT_CTIME);
     }
 
     private String touch(SessionState st, List<String> args) {
@@ -900,15 +910,16 @@ public class CommandProcessor {
                    "                                 Dload  Upload   Total   Spent    Left  Speed\n" +
                    "100  843k  100  843k    0     0  1287k      0 --:--:-- --:--:-- --:--:-- 1289k";
         }
-        return "--" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) +
+        String host = hostOf(url);
+        return "--" + LocalDateTime.now().format(FMT_DATETIME) +
                "--  " + url + "\n" +
-               "Resolving " + hostOf(url) + " (" + hostOf(url) + ")... 93.184.216.34\n" +
-               "Connecting to " + hostOf(url) + " (" + hostOf(url) + ")|93.184.216.34|:80... connected.\n" +
+               "Resolving " + host + " (" + host + ")... 93.184.216.34\n" +
+               "Connecting to " + host + " (" + host + ")|93.184.216.34|:80... connected.\n" +
                "HTTP request sent, awaiting response... 200 OK\n" +
                "Length: 864512 (844K) [application/octet-stream]\n" +
                "Saving to: '" + filename + "'\n\n" +
                filename + "          100%[===================>] 844.25K  1.29MB/s    in 0.6s\n\n" +
-               LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) +
+               LocalDateTime.now().format(FMT_DATETIME) +
                " (1.29 MB/s) - '" + filename + "' saved [864512/864512]";
     }
 
@@ -1028,12 +1039,12 @@ public class CommandProcessor {
         return "; <<>> DiG 9.18.18-0ubuntu0.22.04.1-Ubuntu <<>> " + host + "\n" +
                ";; global options: +cmd\n" +
                ";; Got answer:\n" +
-               ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: " + (10000 + RANDOM.nextInt(50000)) + "\n" +
+               ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: " + (10000 + ThreadLocalRandom.current().nextInt(50000)) + "\n" +
                ";; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1\n\n" +
                ";; QUESTION SECTION:\n;" + host + ".\t\t\t\tIN\tA\n\n" +
                ";; ANSWER SECTION:\n" + host + ".\t\t54\tIN\tA\t93.184.216.34\n\n" +
-               ";; Query time: " + (5 + RANDOM.nextInt(40)) + " msec\n;; SERVER: 10.0.0.2#53(10.0.0.2) (UDP)\n;; WHEN: " +
-               LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss 'UTC' yyyy", Locale.ENGLISH)) +
+               ";; Query time: " + (5 + ThreadLocalRandom.current().nextInt(40)) + " msec\n;; SERVER: 10.0.0.2#53(10.0.0.2) (UDP)\n;; WHEN: " +
+               LocalDateTime.now().format(FMT_CTIME) +
                "\n;; MSG SIZE  rcvd: 55";
     }
 
@@ -1102,7 +1113,7 @@ public class CommandProcessor {
 
     private String journalctl() {
         return "-- Journal begins at Mon 2026-06-24 06:13:02 UTC, ends at " +
-               LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + " UTC. --\n" +
+               LocalDateTime.now().format(FMT_DATETIME) + " UTC. --\n" +
                "Aug 11 06:25:01 " + hostname + " systemd[1]: Started Session 42 of user root.\n" +
                "Aug 11 06:25:03 " + hostname + " sshd[21841]: Accepted password for root from 203.0.113.44 port 51220 ssh2";
     }
@@ -1434,7 +1445,7 @@ public class CommandProcessor {
         // 用随机字符替换末尾的 X
         String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
         StringBuilder rand = new StringBuilder(xCount);
-        for (int i = 0; i < xCount; i++) rand.append(chars.charAt(RANDOM.nextInt(chars.length())));
+        for (int i = 0; i < xCount; i++) rand.append(chars.charAt(ThreadLocalRandom.current().nextInt(chars.length())));
         String abs = st.fs.normalize(st.cwd, tmpl.substring(0, tmpl.length() - xCount) + rand);
         // 父目录存在才落地假文件
         int slash = abs.lastIndexOf('/');

@@ -46,10 +46,10 @@ public class AttackLogger implements AutoCloseable {
     private final ExecutorService writePool =
             Executors.newSingleThreadExecutor(Thread.ofVirtual().name("attack-log-writer").factory());
 
-    /** SQLite 写入动作：与对应 JSONL 记录共用同一时间戳，在单线程写入器中串行执行 */
+    /** SQLite 写入动作：与对应 JSONL 记录共用同一时间戳/毫秒时钟，在单线程写入器中串行执行 */
     @FunctionalInterface
     private interface DbSink {
-        void write(SqliteLogStore store, LocalDateTime ts) throws SQLException;
+        void write(SqliteLogStore store, String ts, long epochMs) throws SQLException;
     }
 
     public AttackLogger(Path logFile, Path dbFile, IpLocator ipLocator) throws IOException {
@@ -87,7 +87,7 @@ public class AttackLogger implements AutoCloseable {
         fields.put("src_ip", ip);
         fields.put("src_port", String.valueOf(port));
         if (location != null) fields.put("location", location);
-        write(fields, (store, ts) -> store.recordSessionOpen(ts, sessionId, protocol, ip, port, location));
+        write(fields, (store, ts, epoch) -> store.recordSessionOpen(ts, epoch, sessionId, protocol, ip, port, location));
     }
 
     public void authAttempt(String sessionId, String protocol, String ip,
@@ -103,7 +103,7 @@ public class AttackLogger implements AutoCloseable {
         fields.put("success", String.valueOf(success));
         if (location != null) fields.put("location", location);
         write(fields,
-                (store, ts) -> store.recordAuthAttempt(ts, sessionId, protocol, ip, username, password, success, location));
+                (store, ts, epoch) -> store.recordAuthAttempt(ts, epoch, sessionId, protocol, ip, username, password, success, location));
         System.out.printf("[%s] [%s] 登录尝试 %s 用户=%s 密码=%s -> %s%n",
                 LocalDateTime.now().format(TS), protocol, ip, username, password,
                 success ? "放行(蜜罐)" : "拒绝");
@@ -118,7 +118,7 @@ public class AttackLogger implements AutoCloseable {
         fields.put("src_ip", ip);
         fields.put("until", until);
         if (location != null) fields.put("location", location);
-        write(fields, (store, ts) -> store.recordIpLocked(ts, ip, untilMillis, location));
+        write(fields, (store, ts, epoch) -> store.recordIpLocked(ts, epoch, ip, until, location));
         System.out.printf("[%s] 源 IP %s 连续登录失败已达上限，锁定至 %s%n",
                 LocalDateTime.now().format(TS), ip, until);
     }
@@ -132,7 +132,7 @@ public class AttackLogger implements AutoCloseable {
         fields.put("username", username);
         fields.put("command", cmdline);
         if (location != null) fields.put("location", location);
-        write(fields, (store, ts) -> store.recordCommand(ts, sessionId, ip, username, cmdline, location));
+        write(fields, (store, ts, epoch) -> store.recordCommand(ts, epoch, sessionId, ip, username, cmdline, location));
         System.out.printf("[%s] [%s] %s$ %s%n", LocalDateTime.now().format(TS), ip, username, cmdline);
     }
 
@@ -145,7 +145,7 @@ public class AttackLogger implements AutoCloseable {
         fields.put("username", username);
         fields.put("url", url);
         if (location != null) fields.put("location", location);
-        write(fields, (store, ts) -> store.recordDownload(ts, sessionId, ip, username, url, location));
+        write(fields, (store, ts, epoch) -> store.recordDownload(ts, epoch, sessionId, ip, username, url, location));
         System.out.printf("[%s] [%s] 恶意下载: %s%n", LocalDateTime.now().format(TS), ip, url);
     }
 
@@ -157,7 +157,7 @@ public class AttackLogger implements AutoCloseable {
         fields.put("src_ip", ip);
         fields.put("duration_ms", String.valueOf(durationMs));
         if (location != null) fields.put("location", location);
-        write(fields, (store, ts) -> store.recordSessionClose(ts, sessionId, durationMs));
+        write(fields, (store, ts, epoch) -> store.recordSessionClose(ts, sessionId, durationMs));
     }
 
     /** 解析来源 IP 归属地；定位器不可用时返回 null（JSONL 不输出该字段，SQLite 存 NULL） */
@@ -166,10 +166,13 @@ public class AttackLogger implements AutoCloseable {
     }
 
     private void write(Map<String, String> fields, DbSink dbSink) {
-        // 序列化在调用线程完成（纯内存操作），磁盘写入异步串行执行
+        // 序列化在调用线程完成（纯内存操作），磁盘写入异步串行执行；
+        // 时间戳文本与 epoch 毫秒只计算一次，JSONL 与 SQLite 两侧复用
         LocalDateTime now = LocalDateTime.now();
+        String tsText = now.format(TS);
+        long epochMs = now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
         StringBuilder sb = new StringBuilder(128);
-        sb.append('{').append("\"ts\":\"").append(now.format(TS)).append('"');
+        sb.append('{').append("\"ts\":\"").append(tsText).append('"');
         fields.forEach((k, v) -> sb.append(",\"").append(k).append("\":\"").append(escape(v)).append('"'));
         sb.append('}');
         String line = sb.toString();
@@ -184,7 +187,7 @@ public class AttackLogger implements AutoCloseable {
                 }
                 if (db != null && dbSink != null) {
                     try {
-                        dbSink.write(db, now);
+                        dbSink.write(db, tsText, epochMs);
                     } catch (SQLException e) {
                         LOG.warning("SQLite 写入失败: " + e.getMessage());
                     }
@@ -197,6 +200,11 @@ public class AttackLogger implements AutoCloseable {
 
     private static String escape(String s) {
         if (s == null) return "";
+        // 热路径快查：不含任何需转义字符时直接复用原串，避免 5 次 replace 链的无谓拷贝
+        if (s.indexOf('\\') < 0 && s.indexOf('"') < 0 && s.indexOf('\n') < 0
+                && s.indexOf('\r') < 0 && s.indexOf('\t') < 0) {
+            return s;
+        }
         return s.replace("\\", "\\\\").replace("\"", "\\\"")
                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }

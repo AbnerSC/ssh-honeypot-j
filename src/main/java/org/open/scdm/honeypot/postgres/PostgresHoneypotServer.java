@@ -2,11 +2,13 @@ package org.open.scdm.honeypot.postgres;
 
 import org.open.scdm.honeypot.log.AttackLogger;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
@@ -48,6 +50,10 @@ public class PostgresHoneypotServer {
     private static final int MAX_CONNECTIONS = 20;
     /** 可接受的最大报文长度（防止超大报文耗尽内存） */
     private static final int MAX_MESSAGE_LENGTH = 0x10000;
+
+    /** 连接数超限错误帧：内容固定，启动时构造一次复用（海量扫描连接下避免每连接重复构造） */
+    private static final byte[] ERROR_TOO_MANY_CLIENTS = errorPacket(
+            SQLSTATE_TOO_MANY_CLIENTS, "sorry, too many clients already", "proc.c", "BackendStartup");
 
     private final int port;
     private final AttackLogger logger;
@@ -95,8 +101,9 @@ public class PostgresHoneypotServer {
         if (activeConnections.incrementAndGet() > MAX_CONNECTIONS) {
             activeConnections.decrementAndGet();
             try (socket) {
-                sendError(socket, SQLSTATE_TOO_MANY_CLIENTS,
-                        "sorry, too many clients already", "proc.c", "BackendStartup");
+                OutputStream over = socket.getOutputStream();
+                over.write(ERROR_TOO_MANY_CLIENTS);
+                over.flush();
             } catch (IOException e) {
                 // 客户端提前断开：静默忽略
             } finally {
@@ -106,7 +113,8 @@ public class PostgresHoneypotServer {
         }
         try (socket) {
             socket.setSoTimeout(READ_TIMEOUT_MS);
-            DataInputStream in = new DataInputStream(socket.getInputStream());
+            // 缓冲读取：启动报文长度字段等逐字段读取，避免每字段一次底层系统调用
+            DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream(), 1024));
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             String user = readStartup(in, out);
             if (user == null) return;               // 非标准流量（取消请求/旧协议/缺用户名）：静默断开
@@ -118,8 +126,8 @@ public class PostgresHoneypotServer {
             String password = readPassword(in);
             logger.authAttempt(sessionId, "postgresql", ip, user,
                     password.isEmpty() ? "(空)" : password, false);
-            sendError(socket, SQLSTATE_AUTH_FAILED,
-                    "password authentication failed for user \"" + user + "\"", "auth.c", "auth_failed");
+            sendError(out, errorPacket(SQLSTATE_AUTH_FAILED,
+                    "password authentication failed for user \"" + user + "\"", "auth.c", "auth_failed"));
         } catch (SocketTimeoutException | EOFException e) {
             // 扫描器未发送完整报文或客户端提前断开：静默忽略
         } catch (IOException e) {
@@ -183,9 +191,8 @@ public class PostgresHoneypotServer {
         return body;
     }
 
-    /** 发送 ErrorResponse（FATAL 级别） */
-    private static void sendError(Socket socket, String sqlstate, String message,
-                                  String file, String routine) throws IOException {
+    /** 构造 ErrorResponse 完整协议帧（FATAL 级别）：类型字节 + 长度 + 字段列表 */
+    private static byte[] errorPacket(String sqlstate, String message, String file, String routine) {
         ByteArrayOutputStream b = new ByteArrayOutputStream(160);
         writeField(b, 'S', "FATAL");
         writeField(b, 'V', "FATAL");
@@ -196,10 +203,20 @@ public class PostgresHoneypotServer {
         writeField(b, 'R', routine);
         b.write(0x00);                              // 字段列表终止符
         byte[] payload = b.toByteArray();
-        DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-        out.writeByte('E');                         // ErrorResponse
-        out.writeInt(4 + payload.length);           // 长度含自身 4 字节
-        out.write(payload);
+        byte[] pkt = new byte[1 + 4 + payload.length];
+        pkt[0] = 'E';                               // ErrorResponse
+        int len = 4 + payload.length;               // 长度含自身 4 字节
+        pkt[1] = (byte) (len >> 24);
+        pkt[2] = (byte) (len >> 16);
+        pkt[3] = (byte) (len >> 8);
+        pkt[4] = (byte) len;
+        System.arraycopy(payload, 0, pkt, 5, payload.length);
+        return pkt;
+    }
+
+    /** 发送 ErrorResponse（FATAL 级别） */
+    private static void sendError(OutputStream out, byte[] pkt) throws IOException {
+        out.write(pkt);
         out.flush();
     }
 

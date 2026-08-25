@@ -184,17 +184,15 @@ public class LogRepository implements AutoCloseable {
     public Map<String, Object> ipLocks(String srcIp, int page, int size) throws SQLException {
         Where w = new Where();
         w.like("src_ip", srcIp);
-        Map<String, Object> result = pageQuery("ip_locks", w, page, size, "ORDER BY ts_epoch_ms DESC, id DESC");
+        // 锁定状态随行计算（一条 SQL 得出），避免原先对每行再单独发查询的 N+1 开销
+        Map<String, Object> result = pageQuery("ip_locks",
+                "*, locked_until > datetime('now','localtime') AS lockedActive",
+                w, page, size, "ORDER BY ts_epoch_ms DESC, id DESC");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
-        try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT locked_until > datetime('now','localtime') FROM ip_locks WHERE id = ?")) {
-            for (Map<String, Object> row : rows) {
-                ps.setLong(1, ((Number) row.get("id")).longValue());
-                try (ResultSet rs = ps.executeQuery()) {
-                    row.put("lockedActive", rs.next() && rs.getInt(1) == 1);
-                }
-            }
+        // SQLite 表达式结果为 0/1，转为布尔保持 API 响应与原实现一致
+        for (Map<String, Object> row : rows) {
+            row.put("lockedActive", ((Number) row.get("lockedActive")).intValue() == 1);
         }
         return result;
     }
@@ -232,6 +230,11 @@ public class LogRepository implements AutoCloseable {
 
     private Map<String, Object> pageQuery(String table, Where w, int page, int size,
                                           String orderClause) throws SQLException {
+        return pageQuery(table, "*", w, page, size, orderClause);
+    }
+
+    private Map<String, Object> pageQuery(String table, String columns, Where w, int page, int size,
+                                          String orderClause) throws SQLException {
         long total;
         try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM " + table + w.sql)) {
             bind(ps, w.params);
@@ -239,17 +242,21 @@ public class LogRepository implements AutoCloseable {
                 total = rs.next() ? rs.getLong(1) : 0;
             }
         }
-        List<Map<String, Object>> rows = new ArrayList<>();
-        String sql = "SELECT * FROM " + table + w.sql + " " + orderClause + " LIMIT ? OFFSET ?";
+        List<Map<String, Object>> rows = new ArrayList<>(Math.min(size, 200));
+        String sql = "SELECT " + columns + " FROM " + table + w.sql + " " + orderClause + " LIMIT ? OFFSET ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             bind(ps, w.params);
             ps.setInt(w.params.size() + 1, size);
             ps.setLong(w.params.size() + 2, (long) (page - 1) * size);
             try (ResultSet rs = ps.executeQuery()) {
-                int n = rs.getMetaData().getColumnCount();
+                // 元数据与列标签只取一次，避免原先每行重复调用 rs.getMetaData()
+                java.sql.ResultSetMetaData md = rs.getMetaData();
+                int n = md.getColumnCount();
+                String[] labels = new String[n];
+                for (int i = 0; i < n; i++) labels[i] = md.getColumnLabel(i + 1);
                 while (rs.next()) {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    for (int i = 1; i <= n; i++) row.put(rs.getMetaData().getColumnLabel(i), rs.getObject(i));
+                    Map<String, Object> row = new LinkedHashMap<>(n * 2);
+                    for (int i = 0; i < n; i++) row.put(labels[i], rs.getObject(i + 1));
                     rows.add(row);
                 }
             }

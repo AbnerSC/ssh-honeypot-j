@@ -8,6 +8,7 @@ import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import io.javalin.router.JavalinDefaultRoutingApi;
 
+import java.lang.reflect.Type;
 import java.util.Map;
 
 /**
@@ -19,6 +20,8 @@ import java.util.Map;
 public class ApiController {
 
     private static final Gson GSON = new Gson();
+    /** 请求体 JSON 反序列化目标类型：只构建一次，避免每次解析分配匿名 TypeToken 子类 */
+    private static final Type BODY_TYPE = new TypeToken<Map<String, Object>>() {}.getType();
 
     private final LogRepository logs;
     private final UserRepository users;
@@ -200,7 +203,7 @@ public class ApiController {
 
     private static Map<String, Object> body(Context ctx) {
         try {
-            Map<String, Object> m = GSON.fromJson(ctx.body(), new TypeToken<Map<String, Object>>() {}.getType());
+            Map<String, Object> m = GSON.fromJson(ctx.body(), BODY_TYPE);
             return m == null ? Map.of() : m;
         } catch (Exception e) {
             throw new BadRequestResponse("请求体不是合法 JSON");

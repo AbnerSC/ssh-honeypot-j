@@ -7,12 +7,14 @@ import org.open.scdm.honeypot.shell.CommandProcessor;
 import org.open.scdm.honeypot.shell.FakeShell;
 import org.open.scdm.honeypot.shell.SessionState;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
@@ -28,6 +30,13 @@ public class TelnetHoneypotServer {
     // Telnet 协议字节
     private static final int IAC = 255, WILL = 251, WONT = 252, DO = 253, DONT = 254, SB = 250, SE = 240;
     private static final int ECHO = 1, SUPPRESS_GO_AHEAD = 3, TERMINAL_TYPE = 24, NAWS = 31, LINEMODE = 34;
+
+    /** 固定响应字节序列：内容不随连接变化，预置避免每个连接重复 getBytes() 分配 */
+    private static final byte[] SYSTEM_BANNER = "\r\nUbuntu 22.04.3 LTS\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] LOGIN_INCORRECT = "\r\nLogin incorrect\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] TOO_MANY_ATTEMPTS = "\r\nToo many failed attempts. Connection locked.\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] CRLF = "\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] BS_ECHO = new byte[]{8, ' ', 8};
 
     private final int port;
     private final VirtualFileSystem fs;
@@ -79,19 +88,20 @@ public class TelnetHoneypotServer {
         long start = System.currentTimeMillis();
         try (socket) {
             socket.setSoTimeout(10 * 60 * 1000); // 10 分钟无操作自动断开
-            PushbackInputStream in = new PushbackInputStream(socket.getInputStream(), 1);
+            // 缓冲读取：登录阶段逐字符读用户名/密码，避免每字节一次底层系统调用
+            PushbackInputStream in = new PushbackInputStream(new BufferedInputStream(socket.getInputStream(), 1024), 1);
             OutputStream out = socket.getOutputStream();
 
             negotiate(out);
 
             // 经典 login 流程：按密码本校验，每次尝试均记录日志
-            out.write("\r\nUbuntu 22.04.3 LTS\r\n".getBytes());
+            out.write(SYSTEM_BANNER);
             out.flush();
             String username = null;
             boolean authed = false;
             for (int attempt = 0; attempt < guard.getMaxFailures(); attempt++) {
                 if (guard.isLocked(ip)) {
-                    out.write("\r\nToo many failed attempts. Connection locked.\r\n".getBytes());
+                    out.write(TOO_MANY_ATTEMPTS);
                     out.flush();
                     break;
                 }
@@ -106,7 +116,7 @@ public class TelnetHoneypotServer {
                     authed = true;
                     break;
                 }
-                out.write("\r\nLogin incorrect\r\n".getBytes());
+                out.write(LOGIN_INCORRECT);
                 out.flush();
             }
             if (!authed) {
@@ -114,7 +124,7 @@ public class TelnetHoneypotServer {
                 logger.sessionClose(sessionId, ip, System.currentTimeMillis() - start);
                 return;
             }
-            out.write("\r\n".getBytes());
+            out.write(CRLF);
             out.flush();
 
             // 进入伪 Shell
@@ -164,7 +174,7 @@ public class TelnetHoneypotServer {
             if (b == 8 || b == 127) {
                 if (buf.length() > 0) {
                     buf.setLength(buf.length() - 1);
-                    if (echo) out.write(new byte[]{8, ' ', 8});
+                    if (echo) out.write(BS_ECHO);
                 }
                 continue;
             }
@@ -173,7 +183,7 @@ public class TelnetHoneypotServer {
             if (echo) out.write(b); else out.write('*'); // 密码不回显明文
             out.flush();
         }
-        out.write("\r\n".getBytes());
+        out.write(CRLF);
         out.flush();
         return buf.toString();
     }
