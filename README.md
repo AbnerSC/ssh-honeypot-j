@@ -171,7 +171,7 @@ services:
     image: babyfly/ssh-honeypot-j:latest
     # 阿里云：crpi-gbejqvtf2wfon7bh.cn-chengdu.personal.cr.aliyuncs.com/scdm/ssh-honeypot-j:latest
     container_name: ssh-honeypot-j
-    restart: always
+    restart: unless-stopped
     volumes:
       - ${PWD}/logs:/app/logs  # 挂载宿主机日志目录
       - ${PWD}/db:/app/db      # 挂载宿主机数据库目录
@@ -184,6 +184,7 @@ services:
       - 5432:5432              # Postgre数据库端口
       - 6379:6379              # Redis数据库端口
       - 127.0.0.1:11800:8080   # Web控制台端口，建议使用nginx代理为https
+    cpus: 0.5                  # CPU上限，防止占满宿主机
     mem_limit: 300m            # 内存限制，被持续攻击大约需要240MB
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8080"]
@@ -191,6 +192,13 @@ services:
       timeout: 3s
       retries: 3
       start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+    security_opt:
+      - no-new-privileges:true  # 阻止容器内提权
 ```
 
 启动：
