@@ -14,8 +14,8 @@
 #     选择分支时仅推送 latest
 #
 # 前置条件：
-#   - 仓库 Settings -> Secrets 中配置：
-#       NEXUS_REGISTRY   Nexus Docker 仓库地址（host[:port][/路径]，如
+#   - 仓库 Settings -> vars 中配置：
+#       NEXUS_REGISTRY_DOCKER   Nexus Docker 仓库地址（host[:port][/路径]，如
 #                        nexus.example.com:8082 或 nexus.example.com/repository/docker-releases）
 #       NEXUS_USERNAME   Nexus 账号
 #       NEXUS_PASSWORD   Nexus 密码
@@ -25,6 +25,8 @@ name: Docker 镜像构建（Nexus）
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'release-v*'
   workflow_dispatch:
@@ -48,23 +50,23 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      # 提前校验 Secrets，避免构建完成后才因镜像名/登录失败报错
+      # 提前校验 vars，避免构建完成后才因镜像名/登录失败报错
       - name: 检查 Nexus 配置
         shell: bash
         env:
-          NEXUS_REGISTRY: ${{ secrets.NEXUS_REGISTRY }}
+          NEXUS_REGISTRY_DOCKER: ${{ vars.NEXUS_REGISTRY_DOCKER }}
         run: |
-          if [[ -z "$NEXUS_REGISTRY" ]]; then
-            echo "::error::未配置 Secret：NEXUS_REGISTRY（Nexus Docker 仓库地址 host[:port][/路径]）"
+          if [[ -z "$NEXUS_REGISTRY_DOCKER" ]]; then
+            echo "::error::未配置 Secret：NEXUS_REGISTRY_DOCKER（Nexus Docker 仓库地址 host[:port][/路径]）"
             exit 1
           fi
           # 镜像 tag 允许 host[:port][/仓库路径]（Nexus 路径式仓库），禁止协议前缀、首尾斜杠、大写字母等，
           # 提前校验避免构建完才报 invalid reference format
-          if [[ "$NEXUS_REGISTRY" =~ :// || "$NEXUS_REGISTRY" == /* || "$NEXUS_REGISTRY" == */ || "$NEXUS_REGISTRY" == *//* || -n "${NEXUS_REGISTRY//[a-z0-9._\/:-]/}" ]]; then
-            echo "::error::NEXUS_REGISTRY 必须是 host[:port][/路径] 形式（如 nexus.example.com:8082 或 nexus.example.com/repository/docker），不能包含协议前缀、首尾斜杠或大写字母"
+          if [[ "$NEXUS_REGISTRY_DOCKER" =~ :// || "$NEXUS_REGISTRY_DOCKER" == /* || "$NEXUS_REGISTRY_DOCKER" == */ || "$NEXUS_REGISTRY_DOCKER" == *//* || -n "${NEXUS_REGISTRY_DOCKER//[a-z0-9._\/:-]/}" ]]; then
+            echo "::error::NEXUS_REGISTRY_DOCKER 必须是 host[:port][/路径] 形式（如 nexus.example.com:8082 或 nexus.example.com/repository/docker），不能包含协议前缀、首尾斜杠或大写字母"
             exit 1
           fi
-          echo "Nexus 仓库地址：$NEXUS_REGISTRY"
+          echo "Nexus 仓库地址：$NEXUS_REGISTRY_DOCKER"
 
       # 从 tag 解析版本号：release-v1.2.3 -> 1.2.3
       # 无论 tag 推送还是手动选择 tag 触发，只要 ref 以 release-v 开头即解析；
@@ -96,16 +98,16 @@ jobs:
       - name: 登录 Nexus
         uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.NEXUS_REGISTRY }}
-          username: ${{ secrets.NEXUS_USERNAME }}
-          password: ${{ secrets.NEXUS_PASSWORD }}
+          registry: ${{ vars.NEXUS_REGISTRY_DOCKER }}
+          username: ${{ vars.NEXUS_USERNAME }}
+          password: ${{ vars.NEXUS_PASSWORD }}
 
       # release-v 开头的 tag（推送或手动选择）：1.2.3、latest；手动选择分支：仅 latest
       - name: 生成镜像标签与元数据
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.NEXUS_REGISTRY }}/scdm/${{ env.IMAGE_NAME }}
+          images: ${{ vars.NEXUS_REGISTRY_DOCKER }}/scdm/${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
           tags: |
