@@ -5,12 +5,6 @@
 # NetGazer 网络凝视者
 一款 **中交互** 多协议蜜罐，静默凝视每一次针对服务器的暴力破解与入侵行为。
 
-## GitHub
-https://github.com/AbnerSC/ssh-honeypot-j.git
-
-[![GitHub Stars](https://img.shields.io/github/stars/AbnerSC/ssh-honeypot-j?style=flat&label=Stars)](https://github.com/AbnerSC/ssh-honeypot-j/stargazers)
-[![Docker Pulls](https://img.shields.io/docker/pulls/babyfly/ssh-honeypot-j?label=Docker%20Pulls)](https://hub.docker.com/r/babyfly/ssh-honeypot-j)
-
 基于 **Apache MINA SSHD** 实现 SSH 协议，原生 Socket 实现 Telnet 协议，
 内置伪装的 Ubuntu 22.04 虚拟文件系统与伪 Shell，
 支持 SSH / Telnet / MySQL / PostgreSQL / Redis 多协议诱捕，
@@ -18,6 +12,19 @@ https://github.com/AbnerSC/ssh-honeypot-j.git
 
 > ⚠️ 仅用于安全研究与授权环境。蜜罐会吸引真实攻击者，请务必在隔离的
 > 测试/专用机器上运行，不要部署在存有敏感数据的生产服务器上。
+
+## GitHub
+https://github.com/AbnerSC/ssh-honeypot-j.git
+
+[![GitHub Stars](https://img.shields.io/github/stars/AbnerSC/ssh-honeypot-j?style=flat&label=Stars)](https://github.com/AbnerSC/ssh-honeypot-j/stargazers)
+[![Docker Pulls](https://img.shields.io/docker/pulls/babyfly/ssh-honeypot-j?label=Docker%20Pulls)](https://hub.docker.com/r/babyfly/ssh-honeypot-j)
+
+## 研究说明
+本项目主要是用于研究学习，欢迎star和fork。
+1. 作者常年从事Java开发，因此本项目用的Java语言，就不要问为什么不使用go、c++等等；
+2. 本地开发环境使用的Gitea管理代码并自动同步到Github，本项目学习使用Gitea和GitHub Action自动构建和发布Docker成品镜像；
+3. 本项目95%以上代码由AI生成，研究使用AI提高工作效率；
+4. 通过本项目，可以收集到网络攻击常用账号密码、攻击命令，可以用于研究网络攻击行为；
 
 ## 功能特性
 
