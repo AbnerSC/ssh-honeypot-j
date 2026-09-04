@@ -57,7 +57,7 @@ jobs:
           NEXUS_REGISTRY_DOCKER: ${{ vars.NEXUS_REGISTRY_DOCKER }}
         run: |
           if [[ -z "$NEXUS_REGISTRY_DOCKER" ]]; then
-            echo "::error::未配置 Secret：NEXUS_REGISTRY_DOCKER（Nexus Docker 仓库地址 host[:port][/路径]）"
+            echo "::error::未配置 vars：NEXUS_REGISTRY_DOCKER（Nexus Docker 仓库地址 host[:port][/路径]）"
             exit 1
           fi
           # 镜像 tag 允许 host[:port][/仓库路径]（Nexus 路径式仓库），禁止协议前缀、首尾斜杠、大写字母等，
