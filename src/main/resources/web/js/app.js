@@ -247,7 +247,7 @@ function tableView(cfg) {
             </div>
             <div class="table-wrap">
                 <table>
-                    <thead><tr>${cfg.cols.map((c) => `<th>${c.label}</th>`).join('')}</tr></thead>
+                    <thead><tr>${cfg.cols.map((c) => `<th${c.width ? ` style="width:${c.width}px"` : ''}>${c.label}</th>`).join('')}</tr></thead>
                     <tbody id="tv-body"></tbody>
                 </table>
             </div>
@@ -567,15 +567,15 @@ const VIEWS = {
         api: '/api/sessions',
         filters: [textFilter('f-ip', '来源 IP', 'srcIp'), protoFilter(), dateRangeFilter()],
         cols: [
-            { key: 'session_id', label: '会话 ID', cls: 'mono' },
-            { key: 'protocol', label: '协议', render: protoCell },
-            { key: 'src_ip', label: '来源 IP', cls: 'mono' },
-            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
-            { key: 'src_port', label: '端口' },
-            { key: 'opened_at', label: '开始时间', render: (r) => fmtTs(r.opened_at) },
-            { key: 'closed_at', label: '结束时间', render: (r) => r.closed_at ? fmtTs(r.closed_at) : '<span class="tag red">异常断开</span>' },
-            { key: 'duration_ms', label: '时长', render: (r) => r.duration_ms == null ? '-' : (r.duration_ms / 1000).toFixed(1) + 's' },
-            { key: '_op', label: '操作', render: (r) => `<button class="btn sm cmd" data-cmd-session="${esc(r.session_id)}">❯ 命令记录</button>` }
+            { key: 'session_id', label: '会话 ID', cls: 'mono', width: 150 },
+            { key: 'protocol', label: '协议', render: protoCell, width: 100 },
+            { key: 'src_ip', label: '来源 IP', cls: 'mono', width: 150 },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-', width: 200 },
+            { key: 'src_port', label: '端口', width: 70 },
+            { key: 'opened_at', label: '开始时间', render: (r) => fmtTs(r.opened_at), width: 165 },
+            { key: 'closed_at', label: '结束时间', render: (r) => r.closed_at ? fmtTs(r.closed_at) : '<span class="tag red">异常断开</span>', width: 165 },
+            { key: 'duration_ms', label: '时长', render: (r) => r.duration_ms == null ? '-' : (r.duration_ms / 1000).toFixed(1) + 's', width: 65 },
+            { key: '_op', label: '操作', render: (r) => `<button class="btn sm cmd" data-cmd-session="${esc(r.session_id)}">❯ 命令记录</button>`, width: 110 }
         ]
     }),
 
