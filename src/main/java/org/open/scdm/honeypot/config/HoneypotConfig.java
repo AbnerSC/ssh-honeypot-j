@@ -40,6 +40,12 @@ import java.util.Map;
  *   db: logs/database.db
  *   ipdb_v4: db/ip2region_v4.xdb
  *   ipdb_v6: db/ip2region_v6.xdb
+ * ai:
+ *   enabled: true
+ *   base_url: http://host:port/v1
+ *   api_key: xxx
+ *   model_name: xxx
+ *   enable_thinking: false
  * web:
  *   enabled: true
  *   port: 8080
@@ -70,6 +76,7 @@ public class HoneypotConfig {
     private Log log = new Log();
     private Web web = new Web();
     private Auth auth = new Auth();
+    private Ai ai = new Ai();
 
     public static class Ssh {
         private boolean enabled = true;
@@ -224,6 +231,54 @@ public class HoneypotConfig {
     }
 
     /**
+     * 大模型命令仿真配置：为伪 Shell 未覆盖的未知命令生成仿真终端输出。
+     * 未启用（enabled=false）或关键配置缺失时，AiClient 不创建，
+     * 未知命令一律降级本地兜底 "-bash: xxx: command not found"。
+     * <p>
+     * 字段名与 YAML 键同名（snake_case，与 ipdb_v4 同风格），由 SnakeYAML 按属性名精确映射。
+     */
+    public static class Ai {
+        private boolean enabled = false;
+        private String base_url = "";
+        private String api_key = "";
+        private String model_name = "";
+        /** 是否开启模型思考模式（混合推理模型经 chat_template_kwargs 透传；开启后响应更慢，建议调大 timeout_seconds） */
+        private boolean enable_thinking = false;
+        /** 单次请求超时（秒），超时立即降级本地兜底 */
+        private int timeout_seconds = 20;
+        /** 单条输出最大字符数：超长截断，防长输出撑爆小堆内存 */
+        private int max_output_chars = 8192;
+        /** 全局并发请求上限：超出的命令立即降级不排队，防大模型服务被打爆 */
+        private int max_concurrent = 4;
+        /** 连续失败达到该次数后触发熔断 */
+        private int failure_threshold = 3;
+        /** 熔断时长（秒）：期间不再请求 AI，未知命令直接本地兜底 */
+        private int cooldown_seconds = 300;
+
+        public boolean isEnabled() { return enabled; }
+        public String getBase_url() { return base_url; }
+        public String getApi_key() { return api_key; }
+        public String getModel_name() { return model_name; }
+        public boolean isEnable_thinking() { return enable_thinking; }
+        public int getTimeout_seconds() { return timeout_seconds; }
+        public int getMax_output_chars() { return max_output_chars; }
+        public int getMax_concurrent() { return max_concurrent; }
+        public int getFailure_threshold() { return failure_threshold; }
+        public int getCooldown_seconds() { return cooldown_seconds; }
+
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public void setBase_url(String base_url) { this.base_url = base_url; }
+        public void setApi_key(String api_key) { this.api_key = api_key; }
+        public void setModel_name(String model_name) { this.model_name = model_name; }
+        public void setEnable_thinking(boolean enable_thinking) { this.enable_thinking = enable_thinking; }
+        public void setTimeout_seconds(int timeout_seconds) { this.timeout_seconds = timeout_seconds; }
+        public void setMax_output_chars(int max_output_chars) { this.max_output_chars = max_output_chars; }
+        public void setMax_concurrent(int max_concurrent) { this.max_concurrent = max_concurrent; }
+        public void setFailure_threshold(int failure_threshold) { this.failure_threshold = failure_threshold; }
+        public void setCooldown_seconds(int cooldown_seconds) { this.cooldown_seconds = cooldown_seconds; }
+    }
+
+    /**
      * 从指定路径加载配置；文件不存在时使用内置默认值。
      */
     public static HoneypotConfig load(String path) throws IOException {
@@ -300,6 +355,7 @@ public class HoneypotConfig {
     public Log getLog() { return log; }
     public Web getWeb() { return web; }
     public Auth getAuth() { return auth; }
+    public Ai getAi() { return ai; }
 
     public void setHostname(String hostname) { this.hostname = hostname; }
     public void setSsh(Ssh ssh) { this.ssh = ssh; }
@@ -310,4 +366,5 @@ public class HoneypotConfig {
     public void setLog(Log log) { this.log = log; }
     public void setWeb(Web web) { this.web = web; }
     public void setAuth(Auth auth) { this.auth = auth; }
+    public void setAi(Ai ai) { this.ai = ai; }
 }

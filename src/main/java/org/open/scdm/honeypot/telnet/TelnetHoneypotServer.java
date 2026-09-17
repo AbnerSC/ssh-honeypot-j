@@ -1,5 +1,6 @@
 package org.open.scdm.honeypot.telnet;
 
+import org.open.scdm.honeypot.ai.AiClient;
 import org.open.scdm.honeypot.auth.CredentialGuard;
 import org.open.scdm.honeypot.fs.VirtualFileSystem;
 import org.open.scdm.honeypot.log.AttackLogger;
@@ -50,13 +51,13 @@ public class TelnetHoneypotServer {
     private volatile boolean running = true;
     private ServerSocket serverSocket;
 
-    public TelnetHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard, String hostname) {
+    public TelnetHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard, String hostname, AiClient ai) {
         this.port = port;
         this.fs = fs;
         this.logger = logger;
         this.guard = guard;
         this.hostname = hostname;
-        this.processor = new CommandProcessor(logger, hostname);
+        this.processor = new CommandProcessor(logger, hostname, ai);
     }
 
     public void start() throws IOException {

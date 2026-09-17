@@ -1,5 +1,6 @@
 package org.open.scdm.honeypot.shell;
 
+import org.open.scdm.honeypot.ai.AiClient;
 import org.open.scdm.honeypot.fs.VNode;
 import org.open.scdm.honeypot.log.AttackLogger;
 
@@ -18,6 +19,8 @@ public class CommandProcessor {
     private final AttackLogger logger;
     /** 伪装主机名，用于 uname/hostname/env/journalctl 等命令输出 */
     private final String hostname;
+    /** 大模型命令仿真客户端：未启用/未配置时为 null，未知命令走本地 command not found 兜底 */
+    private final AiClient ai;
 
     /** 命令序列分隔符（; 与 &&）：预编译复用，避免每条命令重复编译正则 */
     private static final Pattern SEQ_SPLIT = Pattern.compile(";|&&");
@@ -30,9 +33,10 @@ public class CommandProcessor {
     /** exit/logout 时返回的标记 */
     public static final String EXIT_SIGNAL = "\u0000__EXIT__";
 
-    public CommandProcessor(AttackLogger logger, String hostname) {
+    public CommandProcessor(AttackLogger logger, String hostname, AiClient ai) {
         this.logger = logger;
         this.hostname = hostname;
+        this.ai = ai;
     }
 
     /**
@@ -263,7 +267,7 @@ public class CommandProcessor {
             case "mktemp" -> mktemp(st, args);
             case "od", "xxd", "hexdump" -> "";
             case "iconv", "dos2unix", "unix2dos" -> "";
-            default -> defaultCmd(name);
+            default -> aiFallback(st, cmd, name);
         };
 
         if (EXIT_SIGNAL.equals(output)) return EXIT_SIGNAL;
@@ -1465,6 +1469,21 @@ public class CommandProcessor {
                 if (f != null) f.content(content + "\n");
             }
         }
+    }
+
+    /**
+     * 未知命令兜底：优先交给大模型生成仿真输出（携带会话上下文保证与攻击者操作连续），
+     * AI 未启用/不可用时回退本地 command not found；降级过程对攻击者不可感知。
+     */
+    private String aiFallback(SessionState st, String cmd, String name) {
+        if (ai != null) {
+            // 最近 3 条历史（不含当前命令）作为会话上下文，让模型输出与前序操作连贯
+            int n = st.history.size();
+            List<String> recent = st.history.subList(Math.max(0, n - 4), Math.max(0, n - 1));
+            String out = ai.generateShellOutput(st.hostname, st.username, st.cwd, recent, cmd);
+            if (out != null) return out; // 空串合法：部分命令本身无输出
+        }
+        return defaultCmd(name);
     }
 
     private String defaultCmd(String name) {

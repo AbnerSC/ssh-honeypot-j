@@ -1,5 +1,6 @@
 package org.open.scdm.honeypot;
 
+import org.open.scdm.honeypot.ai.AiClient;
 import org.open.scdm.honeypot.auth.CredentialGuard;
 import org.open.scdm.honeypot.config.HoneypotConfig;
 import org.open.scdm.honeypot.fs.VirtualFileSystem;
@@ -87,6 +88,9 @@ public class Main {
                 authCfg.getCredentials(), authCfg.getMaxFailures(),
                 authCfg.getWindowMinutes(), authCfg.getLockMinutes(), attackLogger);
 
+        // 大模型命令仿真：未启用/未配置时 create 返回 null，未知命令自动降级为本地 command not found
+        AiClient ai = AiClient.create(config.getAi());
+
         SshHoneypotServer sshServer = null;
         TelnetHoneypotServer telnetServer = null;
         MySqlHoneypotServer mysqlServer = null;
@@ -94,11 +98,11 @@ public class Main {
         RedisHoneypotServer redisServer = null;
 
         if (sshEnabled) {
-            sshServer = new SshHoneypotServer(config.getSsh().getPort(), fs, attackLogger, guard, hostname);
+            sshServer = new SshHoneypotServer(config.getSsh().getPort(), fs, attackLogger, guard, hostname, ai);
             sshServer.start();
         }
         if (telnetEnabled) {
-            telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger, guard, hostname);
+            telnetServer = new TelnetHoneypotServer(config.getTelnet().getPort(), fs, attackLogger, guard, hostname, ai);
             telnetServer.start();
         }
         // 数据库蜜罐：均通过协议交互捕获登录凭证（账号/密码）并记录，再一律返回认证失败后断开（含并发连接限流）
@@ -126,13 +130,14 @@ public class Main {
             }
         }
 
-        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, MySQL=%s, PostgreSQL=%s, Redis=%s, Web=%s, 主机名=%s, 日志=%s, 数据库=%s%n",
+        System.out.printf("蜜罐运行中: SSH=%s, Telnet=%s, MySQL=%s, PostgreSQL=%s, Redis=%s, Web=%s, AI=%s, 主机名=%s, 日志=%s, 数据库=%s%n",
                 sshEnabled ? String.valueOf(config.getSsh().getPort()) : "关闭",
                 telnetEnabled ? String.valueOf(config.getTelnet().getPort()) : "关闭",
                 config.getMysql().isEnabled() ? String.valueOf(config.getMysql().getPort()) : "关闭",
                 config.getPostgresql().isEnabled() ? String.valueOf(config.getPostgresql().getPort()) : "关闭",
                 config.getRedis().isEnabled() ? String.valueOf(config.getRedis().getPort()) : "关闭",
                 webServer[0] != null ? String.valueOf(webCfg.getPort()) : "关闭",
+                ai != null ? config.getAi().getModel_name() + (config.getAi().isEnable_thinking() ? "(思考开)" : "") : "关闭",
                 hostname, logFile.toAbsolutePath(), dbFile.toAbsolutePath());
         System.out.println("按 Ctrl+C 停止。");
 
@@ -151,6 +156,7 @@ public class Main {
             if (finalPostgres != null) finalPostgres.stop();
             if (finalRedis != null) finalRedis.stop();
             try { if (webServer[0] != null) webServer[0].stop(); } catch (Exception ignored) {}
+            try { if (ai != null) ai.close(); } catch (Exception ignored) {}
             try { attackLogger.close(); } catch (Exception ignored) {}
             ipLocator.close();
             shutdown.countDown();
