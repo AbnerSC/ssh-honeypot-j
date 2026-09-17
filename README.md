@@ -253,18 +253,18 @@ docker compose up -d
 
 无需挂载配置文件，直接在 compose 的 `environment` 中配置，优先级：环境变量 > 挂载的 `config.yaml` > 镜像内置配置：
 
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `AI_ENABLED` | `false` | 是否启用大模型命令仿真 |
-| `AI_BASE_URL` | 空 | OpenAI 兼容接口地址（自动补全 `/v1` 后缀），如 `http://172.17.1.213:18000/v1` |
-| `AI_API_KEY` | 空 | API 密钥；本地无鉴权服务（vLLM/Ollama 等）可留空 |
-| `AI_MODEL_NAME` | 空 | 模型名称，如 `qwen3-2b` |
-| `AI_ENABLE_THINKING` | `false` | 思考模式开关（混合推理模型经 chat_template_kwargs 透传），开启后建议调大超时 |
-| `AI_TIMEOUT_SECONDS` | `20` | 单次请求超时（秒），超时立即降级本地 command not found |
-| `AI_MAX_OUTPUT_CHARS` | `8192` | 单条输出最大字符数，超长截断 |
-| `AI_MAX_CONCURRENT` | `1` | 全局并发请求上限，超出立即降级不排队 |
-| `AI_FAILURE_THRESHOLD` | `3` | 连续失败达到该次数后触发熔断 |
-| `AI_COOLDOWN_SECONDS` | `300` | 熔断时长（秒），期间不再请求大模型 |
+| 环境变量               | 默认值  | 说明                                                                          |
+|------------------------|---------|-------------------------------------------------------------------------------|
+| `AI_ENABLED`           | `false` | 是否启用大模型命令仿真                                                        |
+| `AI_BASE_URL`          | 空      | OpenAI 兼容接口地址（自动补全 `/v1` 后缀），如 `http://172.16.10.200:8000/v1` |
+| `AI_API_KEY`           | 空      | API 密钥；本地无鉴权服务（vLLM/Ollama 等）可留空                              |
+| `AI_MODEL_NAME`        | 空      | 模型名称，如 `qwen3.5-2b`                                                     |
+| `AI_ENABLE_THINKING`   | `false` | 思考模式开关（混合推理模型经 chat_template_kwargs 透传），开启后建议调大超时  |
+| `AI_TIMEOUT_SECONDS`   | `20`    | 单次请求超时（秒），超时立即降级本地 command not found                        |
+| `AI_MAX_OUTPUT_CHARS`  | `8192`  | 单条输出最大字符数，超长截断                                                  |
+| `AI_MAX_CONCURRENT`    | `1`     | 全局并发请求上限，超出立即降级不排队                                          |
+| `AI_FAILURE_THRESHOLD` | `3`     | 连续失败达到该次数后触发熔断                                                  |
+| `AI_COOLDOWN_SECONDS`  | `300`   | 熔断时长（秒），期间不再请求大模型                                            |
 
 启用前提：`AI_ENABLED=true` 且 `AI_BASE_URL`、`AI_MODEL_NAME` 非空，否则自动视为未启用。
 

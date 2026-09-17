@@ -113,6 +113,7 @@ public class AiClient implements AutoCloseable {
                 onAiFailure("AI 响应解析失败（无 choices[0].message.content）");
                 return null;
             }
+            LOG.info("AI 命令仿真输出: " + content);
             consecutiveFailures.set(0); // 成功即复位熔断计数
             return sanitize(content);
         } catch (IOException e) {
@@ -146,7 +147,7 @@ public class AiClient implements AutoCloseable {
         messages.add(message("user", command));
         body.add("messages", messages);
 
-        body.addProperty("temperature", 0.3);
+        body.addProperty("temperature", 1);
         // 思考模式开启时 token 会被推理消耗，放大 max_tokens 保证最终输出不被截断
         body.addProperty("max_tokens", cfg.isEnable_thinking() ? 2048 : 768);
         // 思考模式开关：vLLM/SGLang 等推理框架经 chat_template_kwargs 透传给对话模板（如 Qwen3 的 enable_thinking）
