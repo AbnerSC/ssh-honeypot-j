@@ -150,7 +150,7 @@ public class AiClient implements AutoCloseable {
 
         body.addProperty("temperature", 1);
         // 思考模式开启时 token 会被推理消耗，放大 max_tokens 保证最终输出不被截断
-        body.addProperty("max_tokens", cfg.isEnable_thinking() ? 2048 : 768);
+        body.addProperty("max_tokens", 32768);
         // 思考模式开关：vLLM/SGLang 等推理框架经 chat_template_kwargs 透传给对话模板（如 Qwen3 的 enable_thinking）
         JsonObject templateKwargs = new JsonObject();
         templateKwargs.addProperty("enable_thinking", cfg.isEnable_thinking());
