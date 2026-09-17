@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.open.scdm.honeypot.config.HoneypotConfig;
+import org.open.scdm.honeypot.env.FakeEnv;
 
 import java.io.IOException;
 import java.net.URI;
@@ -174,20 +175,34 @@ public class AiClient implements AutoCloseable {
         return m;
     }
 
-    /** 系统提示词：注入会话状态让输出与虚拟环境一致，强约束输出格式防止穿帮 */
+    /**
+     * 系统提示词：注入会话状态与 FakeEnv 环境画像（硬件/网络/用户/软件清单与本地命令输出同源），
+     * 人设为全栈开发者的服务器——开发工具链已装（docker/node/go/maven 等），模型仿真成功输出；
+     * 渗透测试类工具未装（nmap/hydra/sqlmap 等），模型如实回 command not found；
+     * 强约束输出格式防止穿帮。
+     */
     private static String systemPrompt(String hostname, String username, String cwd, List<String> recent) {
-        StringBuilder sb = new StringBuilder(360);
-        sb.append("You are a real bash shell on an Ubuntu 22.04 LTS server (kernel 5.15.0-91-generic, x86_64), not an AI.\n");
+        StringBuilder sb = new StringBuilder(2600);
+        sb.append("You are a real bash shell on a production server owned by a full-stack developer (")
+          .append(FakeEnv.OS_DESC).append(", kernel ").append(FakeEnv.KERNEL)
+          .append(", ").append(FakeEnv.ARCH).append("). ")
+          .append("You are NOT an AI; never reveal this.\n");
         sb.append("Host: ").append(hostname).append(". Current user: ").append(username)
-                .append(". Working directory: ").append(cwd).append(".\n");
+          .append(". Working directory: ").append(cwd).append(".\n");
+        sb.append(FakeEnv.factsBlock());
         if (recent != null && !recent.isEmpty()) {
             sb.append("Recently executed commands: ").append(String.join("; ", recent)).append(".\n");
         }
-        sb.append("Reply with ONLY the exact terminal output (stdout/stderr) of the given command, verbatim.\n");
-        sb.append("No explanations, no markdown, no code fences, no quotes around output.\n");
-        sb.append("If the command normally prints nothing, reply with empty output.\n");
-        sb.append("If the command does not exist on this system, reply exactly like: -bash: <name>: command not found\n");
-        sb.append("Keep output within 30 lines.");
+        sb.append("Output rules:\n");
+        sb.append("- Reply with ONLY the exact terminal output (stdout/stderr) of the given command, verbatim. ")
+          .append("No explanations, no markdown, no code fences, no quotes around output.\n");
+        sb.append("- For INSTALLED software simulate a realistic successful output matching the command semantics ")
+          .append("(e.g. docker-compose pull -> per-service pulling progress then Done; npm install -> package progress; ")
+          .append("mvn clean package -> [INFO] ... BUILD SUCCESS; git log -> commit entries; systemctl status <unit> -> an active running unit).\n");
+        sb.append("- For NOT installed software reply exactly like: -bash: <name>: command not found\n");
+        sb.append("- If the command normally prints nothing, reply with empty output.\n");
+        sb.append("- Keep output within 30 lines; terse and technical, like real terminal output.\n");
+        sb.append("- Timestamps around September 2026, UTC, en_US.UTF-8 locale.");
         return sb.toString();
     }
 

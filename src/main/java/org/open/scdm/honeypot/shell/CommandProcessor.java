@@ -1,6 +1,7 @@
 package org.open.scdm.honeypot.shell;
 
 import org.open.scdm.honeypot.ai.AiClient;
+import org.open.scdm.honeypot.env.FakeEnv;
 import org.open.scdm.honeypot.fs.VNode;
 import org.open.scdm.honeypot.log.AttackLogger;
 
@@ -127,7 +128,7 @@ public class CommandProcessor {
             case "df" -> df(args);
             case "free" -> free(args);
             case "vmstat" -> vmstat();
-            case "iostat" -> "Linux 5.15.0-91-generic (" + hostname + ") \t08/11/26 \t_x86_64_\t(4 CPU)\n\navg-cpu:  %user   %nice %system %iowait  %steal   %idle\n           1.26    0.01    0.68    0.19    0.00   97.85";
+            case "iostat" -> "Linux " + FakeEnv.KERNEL + " (" + hostname + ") \t08/11/26 \t_" + FakeEnv.ARCH + "_\t(" + FakeEnv.CPU_COUNT + " CPU)\n\navg-cpu:  %user   %nice %system %iowait  %steal   %idle\n           1.26    0.01    0.68    0.19    0.00   97.85";
             case "clear" -> "\033[H\033[2J\033[3J";
             case "touch" -> touch(st, args);
             case "mkdir" -> mkdir(st, args);
@@ -149,28 +150,28 @@ public class CommandProcessor {
             case "wget" -> download(st, args, false);
             case "curl" -> download(st, args, true);
             case "ifconfig" -> ifconfig();
-            case "ip" -> ipCmd(args);
+            case "ip" -> ipCmd(st, cmd, args);
             case "netstat", "ss" -> netstat();
             case "ping", "ping6" -> ping(args);
-            case "traceroute", "tracepath", "mtr" -> "traceroute to " + (args.isEmpty() ? "" : firstNonFlag(args)) + " (93.184.216.34), 30 hops max\n 1  10.0.0.1 (10.0.0.1)  0.412 ms  0.389 ms  0.371 ms\n 2  * * *";
+            case "traceroute", "tracepath", "mtr" -> "traceroute to " + (args.isEmpty() ? "" : firstNonFlag(args)) + " (" + FakeEnv.WAN_IP + "), 30 hops max\n 1  " + FakeEnv.GATEWAY + " (" + FakeEnv.GATEWAY + ")  0.412 ms  0.389 ms  0.371 ms\n 2  * * *";
             case "dig" -> dig(args);
             case "nslookup", "host" -> nslookup(args);
-            case "arp" -> "Address                  HWtype  HWaddress           Flags Mask            Iface\n10.0.0.1                 ether   00:15:5d:00:1a:01   C                     eth0";
-            case "route" -> "Kernel IP routing table\nDestination     Gateway         Genmask         Flags Metric Ref    Use Iface\ndefault         _gateway        0.0.0.0         UG    100    0        0 eth0\n10.0.0.0        0.0.0.0         255.255.255.0   U     100    0        0 eth0";
+            case "arp" -> "Address                  HWtype  HWaddress           Flags Mask            Iface\n" + FakeEnv.GATEWAY + "               ether   00:15:5d:00:1a:01   C                     eth0";
+            case "route" -> "Kernel IP routing table\nDestination     Gateway         Genmask         Flags Metric Ref    Use Iface\ndefault         _gateway        0.0.0.0         UG    100    0        0 eth0\n10.23.76.0      0.0.0.0         255.255.255.0   U     100    0        0 eth0";
             case "kill", "killall", "pkill" -> kill(args);
             case "apt", "apt-get", "aptitude" -> apt(args);
             case "yum", "dnf" -> yum(args);
             case "dpkg", "rpm" -> dpkg(args);
-            case "snap", "flatpak" -> "";
+            case "snap", "flatpak" -> aiFallbackSilent(st, cmd, name);
             case "systemctl" -> systemctl(st, args);
             case "service" -> service(args);
             case "journalctl" -> journalctl();
-            case "crontab" -> crontab(args);
+            case "crontab" -> crontab(st, cmd, args);
             case "tar" -> tar(st, args);
             case "gzip", "gunzip", "bzip2", "xz" -> "";
             case "unzip" -> unzip(st, args);
-            case "zip" -> "";
-            case "rsync" -> "";
+            case "zip" -> aiFallbackSilent(st, cmd, name);   // zip 有 "adding: ..." 进度输出
+            case "rsync" -> aiFallbackSilent(st, cmd, name); // rsync 有传输进度输出
             case "ssh" -> "ssh: connect to host " + (args.isEmpty() ? "" : args.getLast()) + " port 22: Connection timed out";
             case "scp", "sftp" -> name + ": connect to host " + (args.isEmpty() ? "" : args.getLast()) + " port 22: Connection timed out";
             case "ftp", "telnet" -> name + ": connect to address " + (args.isEmpty() ? "" : firstNonFlag(args)) + ": Connection timed out";
@@ -178,7 +179,7 @@ public class CommandProcessor {
             case "mount" -> mount();
             case "umount" -> "umount: " + (args.isEmpty() ? "" : args.getLast()) + ": not mounted.";
             case "lsblk" -> lsblk();
-            case "fdisk", "parted" -> "Disk /dev/sda: 80 GiB, 85899345920 bytes, 167772160 sectors\nDisk model: Virtio Block Dev\nUnits: sectors of 1 * 512 = 512 bytes\n\nDevice     Boot Start       End   Sectors Size Id Type\n/dev/sda1  *     2048 167772159 167770112  80G 83 Linux";
+            case "fdisk", "parted" -> "Disk /dev/sda: " + FakeEnv.DISK_ROOT_SIZE.replace("G", " GiB") + ", 85899345920 bytes, 167772160 sectors\nDisk model: Virtio Block Dev\nUnits: sectors of 1 * 512 = 512 bytes\n\nDevice     Boot Start       End   Sectors Size Id Type\n" + FakeEnv.DISK_ROOT_DEV + "  *     2048 167772159 167770112  " + FakeEnv.DISK_ROOT_SIZE + " 83 Linux";
             case "lsof" -> lsof();
             case "dmesg" -> "dmesg: read kernel buffer failed: Operation not permitted";
             case "reboot", "shutdown", "halt", "poweroff" -> {
@@ -186,17 +187,25 @@ public class CommandProcessor {
                 yield EXIT_SIGNAL; // 模拟系统重启导致连接断开
             }
             case "init" -> initCmd(st, args);
-            case "busybox" -> "BusyBox v1.35.0 (Ubuntu 1:1.35.0-17ubuntu1) multi-call binary.";
-            case "python", "python3" -> python(st, args);
-            case "perl", "php", "ruby", "lua", "node" -> ""; // 交互解释器：静默挂起
-            case "gcc", "cc", "make", "g++", "cmake" -> "";
-            case "java" -> javaCmd(args);
-            case "go", "cargo", "pip", "pip3", "npm", "yarn" -> "";
-            case "nproc" -> "4";
+            case "busybox" -> "BusyBox " + FakeEnv.BUSYBOX + " (Ubuntu 1:1.35.0-17ubuntu1) multi-call binary.";
+            case "python", "python3" -> python(st, cmd, args);
+            // 解释器类：版本查询走本地常量；无参进入交互式解释器静默挂起；带脚本/参数执行交 AI 仿真
+            case "perl", "php", "ruby", "lua", "node" -> {
+                String v = devToolVersion(name, args);
+                if (v != null) yield v;
+                if (args.isEmpty()) yield ""; // 交互式解释器：静默挂起（真实终端行为）
+                yield aiFallbackSilent(st, cmd, name);
+            }
+            // 编译构建与包管理类：版本查询走本地常量（与 AI 提示词同源），其余先 AI 仿真输出、失败回退空串
+            case "gcc", "cc", "g++", "make", "cmake", "go", "cargo", "rustc",
+                 "pip", "pip3", "npm", "yarn", "mvn", "gradle", "composer", "gem", "javac", "git" ->
+                    devToolOrAi(st, cmd, name, args);
+            case "java" -> javaCmd(st, cmd, args);
+            case "nproc" -> String.valueOf(FakeEnv.CPU_COUNT);
             case "lscpu" -> lscpu();
             case "lsmem" -> "RANGE                                  SIZE  STATE REMOVABLE  BLOCK\n0x0000000000000000-0x000000007fffffff   2G online       yes 0-15\n\nMemory block size:       128M\nTotal online memory:       8G\nTotal offline memory:      0B";
             case "lspci" -> "00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)\n00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]\n00:02.0 VGA compatible controller: Cirrus Logic GD 5446\n00:03.0 Ethernet controller: Microsoft Corporation Hyper-V virtual NIC";
-            case "lsusb" -> "";
+            case "lsusb" -> aiFallbackSilent(st, cmd, name); // lsusb 有设备列表输出
             case "lsmod" -> "Module                  Size  Used by\nipv6                  520192  24\nnf_conntrack_netlink    49152  0\nxfrm_algo              16384  1";
             case "modprobe" -> "";
             case "true" -> "";
@@ -210,42 +219,53 @@ public class CommandProcessor {
             case "find" -> find(st, args);
             case "xargs" -> "";
             case "sort", "uniq", "cut", "tr", "tee", "paste", "nl", "column", "expand" -> "";
-            case "awk", "sed" -> "";
-            case "diff" -> "";
+            case "awk", "sed" -> aiFallbackSilent(st, cmd, name);
+            case "diff" -> aiFallbackSilent(st, cmd, name);
             case "base64" -> base64Cmd(st, args);
             case "md5sum", "sha1sum", "sha256sum", "sha512sum" -> sumCmd(st, name, args);
-            case "openssl" -> openssl(args);
+            case "openssl" -> openssl(st, cmd, args);
             case "vi", "vim", "nano", "emacs", "ed" -> ""; // 编辑器：直接挂起太复杂，静默返回
             case "adduser", "useradd" -> useradd(st, args);
             case "usermod" -> "";
             case "deluser", "userdel" -> "";
-            case "getent" -> getent(args);
-            case "finger" -> "";
+            case "getent" -> getent(st, cmd, args);
+            case "finger" -> aiFallbackSilent(st, cmd, name);
             case "iptables" -> iptables(args);
-            case "ufw" -> ufw(args);
+            case "ufw" -> ufw(st, cmd, args);
             case "firewall-cmd" -> "success";
-            case "locate" -> "";
+            case "locate" -> aiFallbackSilent(st, cmd, name);
             case "man" -> "No manual entry for " + (args.isEmpty() ? "" : args.getFirst());
             case "command", "hash" -> "";
             case "alias" -> aliasCmd(args);
             case "unalias" -> "";
-            case "source", "." -> "";
-            case "eval", "exec", "nohup", "disown", "bg", "fg", "jobs" -> "";
+            case "source", ".", "eval" -> aiFallbackSilent(st, cmd, name); // 执行脚本/命令：输出交 AI 仿真
+            case "exec", "nohup", "disown", "bg", "fg", "jobs" -> ""; // 作业控制内建：静默
             case "screen", "tmux" -> "";
-            case "docker" -> docker(args);
+            case "docker" -> docker(st, cmd, args);
             // docker-compose 不做本地拦截：交 aiFallback 由大模型仿真（未启用时回退 command not found，
             // 对 Ubuntu 22.04 同样真实：默认不含 compose v1，装了 v1 的主机模型会回版本号）
-            case "kubectl" -> kubectl(args);
-            case "mysql", "mariadb" -> "ERROR 1045 (28000): Access denied for user '" + (args.isEmpty() ? "root" : userOfDbArgs(args)) + "'@'localhost' (using password: YES)";
-            case "psql" -> "psql: error: connection to server at \"localhost\" (127.0.0.1), port 5432 failed: Connection refused";
-            case "redis-cli" -> "Could not connect to Redis at 127.0.0.1:6379: Connection refused";
-            case "sqlite3" -> "";
-            case "lsb_release" -> lsbRelease(args);
-            case "cat /etc/os-release" -> "";
+            case "kubectl" -> kubectl(st, cmd, args);
+            case "mysql", "mariadb" -> {
+                String v = devToolVersion(name, args);
+                yield v != null ? v : "ERROR 1045 (28000): Access denied for user '" + (args.isEmpty() ? "root" : userOfDbArgs(args)) + "'@'localhost' (using password: YES)";
+            }
+            case "psql" -> {
+                String v = devToolVersion(name, args);
+                yield v != null ? v : "psql: error: connection to server at \"localhost\" (127.0.0.1), port 5432 failed: Connection refused";
+            }
+            case "redis-cli" -> {
+                String v = devToolVersion(name, args);
+                yield v != null ? v : "Could not connect to Redis at 127.0.0.1:6379: Connection refused";
+            }
+            case "sqlite3" -> {
+                String v = devToolVersion(name, args);
+                yield v != null ? v : (args.isEmpty() ? "" : aiFallbackSilent(st, cmd, name)); // 无参进交互：静默挂起
+            }
+            case "lsb_release" -> lsbRelease(st, cmd, args);
             case "neofetch" -> neofetch();
-            case "fortune", "cowsay", "sl" -> "";
+            case "fortune", "cowsay", "sl" -> aiFallbackSilent(st, cmd, name);
             case "dd" -> dd(st, args);
-            case "mkfs", "mkswap" -> "";
+            case "mkfs", "mkswap" -> aiFallbackSilent(st, cmd, name);
             case "fsck" -> "/dev/sda1: clean, 131245/5242880 files, 1531422/20971264 blocks";
             case "swapon" -> "NAME      TYPE      SIZE USED PRIO\n/dev/sda2 partition   2G   0B -2";
             case "swapoff" -> "";
@@ -256,18 +276,18 @@ public class CommandProcessor {
             case "timeout" -> "";
             case "parallel" -> "";
             case "at" -> "at: can't open /var/run/atd.pid";
-            case "visudo", "pkexec", "chroot" -> "";
+            case "visudo" -> ""; // 编辑器挂起
+            case "pkexec", "chroot" -> aiFallbackSilent(st, cmd, name);
             case "strace", "ltrace" -> strace(args);
-            case "gdb" -> "";
-            case "objdump", "strings", "readelf" -> "";
+            case "gdb", "objdump", "strings", "readelf" -> aiFallbackSilent(st, cmd, name);
             case "ldd" -> ldd(args);
             case "file" -> fileCmd(st, args);
-            case "bc", "dc", "expr" -> "";
+            case "bc", "dc", "expr" -> aiFallbackSilent(st, cmd, name);
             case "realpath", "dirname", "basename", "readlink" -> pathCmd(st, name, args);
-            case "cmp" -> "";
+            case "cmp" -> aiFallbackSilent(st, cmd, name);
             case "mktemp" -> mktemp(st, args);
-            case "od", "xxd", "hexdump" -> "";
-            case "iconv", "dos2unix", "unix2dos" -> "";
+            case "od", "xxd", "hexdump" -> aiFallbackSilent(st, cmd, name);
+            case "iconv", "dos2unix", "unix2dos" -> aiFallbackSilent(st, cmd, name);
             default -> aiFallback(st, cmd, name);
         };
 
@@ -371,7 +391,7 @@ public class CommandProcessor {
     /* ------------------------------------------------------------------ */
 
     private String help() {
-        return "GNU bash, version 5.1.16(1)-release (x86_64-pc-linux-gnu)\n" +
+        return "GNU bash, version " + FakeEnv.BASH_VERSION + " (x86_64-pc-linux-gnu)\n" +
                "These shell commands are defined internally.  Type `help' to see this list.\n" +
                "cd ls cat head tail wc echo pwd whoami id uname hostname ps kill clear history exit\n" +
                "cp mv rm mkdir touch chmod chown ln stat du df free top netstat ping wget curl crontab\n" +
@@ -568,12 +588,13 @@ public class CommandProcessor {
     private String uname(List<String> args) {
         String flag = args.isEmpty() ? "" : args.getFirst();
         return switch (flag) {
-            case "-a" -> "Linux " + hostname + " 5.15.0-91-generic #101-Ubuntu SMP Tue Nov 14 13:30:08 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux";
-            case "-r" -> "5.15.0-91-generic";
-            case "-m" -> "x86_64";
+            case "-a" -> "Linux " + hostname + " " + FakeEnv.KERNEL + " " + FakeEnv.KERNEL_BUILD + " "
+                    + FakeEnv.ARCH + " " + FakeEnv.ARCH + " " + FakeEnv.ARCH + " GNU/Linux";
+            case "-r" -> FakeEnv.KERNEL;
+            case "-m" -> FakeEnv.ARCH;
             case "-n" -> hostname;
             case "-s" -> "Linux";
-            case "-v" -> "#101-Ubuntu SMP Tue Nov 14 13:30:08 UTC 2023";
+            case "-v" -> FakeEnv.KERNEL_BUILD;
             case "-o" -> "GNU/Linux";
             default -> "Linux";
         };
@@ -581,7 +602,7 @@ public class CommandProcessor {
 
     private String w(SessionState st) {
         return " " + LocalDateTime.now().format(FMT_TIME_HMS) +
-               " up 47 days,  3:12,  1 user,  load average: 0.08, 0.03, 0.01\n" +
+               " up " + FakeEnv.UPTIME + ",  1 user,  load average: 0.08, 0.03, 0.01\n" +
                "USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT\n" +
                st.username + "   pts/0    " + st.ip + "     " +
                LocalDateTime.now().format(FMT_TIME_HM) +
@@ -591,7 +612,7 @@ public class CommandProcessor {
     private String uptime() {
         double load = ThreadLocalRandom.current().nextDouble(0.01, 0.3);
         return " " + LocalDateTime.now().format(FMT_TIME_HMS) +
-               " up 47 days,  3:12,  1 user,  load average: " +
+               " up " + FakeEnv.UPTIME + ",  1 user,  load average: " +
                String.format("%.2f, %.2f, %.2f", load, load * 0.8, load * 0.6);
     }
 
@@ -617,7 +638,7 @@ public class CommandProcessor {
 
     private String top() {
         return "top - " + LocalDateTime.now().format(FMT_TIME_HMS) +
-               " up 47 days,  3:12,  1 user,  load average: 0.08, 0.03, 0.01\n" +
+               " up " + FakeEnv.UPTIME + ",  1 user,  load average: 0.08, 0.03, 0.01\n" +
                "Tasks:  97 total,   1 running,  96 sleeping,   0 stopped,   0 zombie\n" +
                "%Cpu(s):  1.3 us,  0.7 sy,  0.0 ni, 97.8 id,  0.2 wa,  0.0 hi,  0.0 si,  0.0 st";
     }
@@ -639,35 +660,27 @@ public class CommandProcessor {
     private String df(List<String> args) {
         boolean h = args.stream().anyMatch(a -> a.startsWith("-") && a.contains("h"));
         if (h) {
-            return """
-                    Filesystem      Size  Used  Avail  Use%  Mounted on
-                    /dev/sda1       79G   31G   44G    42%   /
-                    tmpfs           3.9G  0     3.9G   0%    /dev/shm
-                    /dev/sdb1       99G   18G   76G    19%   /data
-                    """;
+            return "Filesystem      Size  Used  Avail  Use%  Mounted on\n" +
+                   FakeEnv.DISK_ROOT_DEV + "       79G   31G   44G    42%   /\n" +
+                   "tmpfs           3.9G  0     3.9G   0%    /dev/shm\n" +
+                   FakeEnv.DISK_DATA_DEV + "       99G   18G   76G    19%   /data";
         }
-        return """
-                Filesystem      1K-blocks     Used       Available  Use%   Mounted on
-                /dev/sda1       82559280      32471164   45875896   42%    /
-                tmpfs           4080572       0          4080572    0%     /dev/shm
-                /dev/sdb1       103080232     18495632   79342184   19%    /data
-                """;
+        return "Filesystem      1K-blocks     Used       Available  Use%   Mounted on\n" +
+               FakeEnv.DISK_ROOT_DEV + "       82559280      32471164   45875896   42%    /\n" +
+               "tmpfs           4080572       0          4080572    0%     /dev/shm\n" +
+               FakeEnv.DISK_DATA_DEV + "       103080232     18495632   79342184   19%    /data";
     }
 
     private String free(List<String> args) {
         boolean h = args.stream().anyMatch(a -> a.startsWith("-") && a.contains("h"));
         if (h) {
-            return """
-                               total        used        free      shared   buff/cache    available
-                    Mem:       7.8Gi       2.7Gi       2.3Gi        12Mi        2.8Gi        5.1Gi
-                    Swap:      2.0Gi          0B       2.0Gi
-                    """;
+            return "               total        used        free      shared   buff/cache    available\n" +
+                   "Mem:       " + FakeEnv.MEM_TOTAL_H + "       2.7Gi       2.3Gi        12Mi        2.8Gi        5.1Gi\n" +
+                   "Swap:      " + FakeEnv.SWAP_TOTAL_H + "          0B       " + FakeEnv.SWAP_TOTAL_H;
         }
-        return """
-                            total        used        free      shared    buff/cache   available
-                Mem:      8161148     2816532     2415688       12460       2928928     5341560
-                Swap:     2097148           0     2097148
-                """;
+        return "                            total        used        free      shared    buff/cache   available\n" +
+               "Mem:      8161148     2816532     2415688       12460       2928928     5341560\n" +
+               "Swap:     2097148           0     2097148";
     }
 
     private String vmstat() {
@@ -918,8 +931,8 @@ public class CommandProcessor {
         String host = hostOf(url);
         return "--" + LocalDateTime.now().format(FMT_DATETIME) +
                "--  " + url + "\n" +
-               "Resolving " + host + " (" + host + ")... 93.184.216.34\n" +
-               "Connecting to " + host + " (" + host + ")|93.184.216.34|:80... connected.\n" +
+               "Resolving " + host + " (" + host + ")... " + FakeEnv.WAN_IP + "\n" +
+               "Connecting to " + host + " (" + host + ")|" + FakeEnv.WAN_IP + "|:80... connected.\n" +
                "HTTP request sent, awaiting response... 200 OK\n" +
                "Length: 864512 (844K) [application/octet-stream]\n" +
                "Saving to: '" + filename + "'\n\n" +
@@ -935,22 +948,20 @@ public class CommandProcessor {
     }
 
     private String ifconfig() {
-        return """
-                eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-                        inet 10.23.76.15  netmask 255.255.255.0  broadcast 10.0.0.255
-                        inet6 fe80::215:5dff:fe00:1a2b  prefixlen 64  scopeid 0x20<link>
-                        ether 00:15:5d:00:1a:2b  txqueuelen 1000  (Ethernet)
-                        RX packets 18492653  bytes 21412405712 (21.4 GB)
-                        RX errors 0  dropped 0  overruns 0  frame 0
-                        TX packets 15248931  bytes 8982341231 (8.9 GB)
-                        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
-
-                lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
-                        inet 127.0.0.1  netmask 255.0.0.0
-                        loop  txqueuelen 1000  (Local Loopback)""";
+        return "eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n" +
+               "        inet " + FakeEnv.ETH0_IP + "  netmask " + FakeEnv.ETH0_NETMASK + "  broadcast " + FakeEnv.ETH0_BROADCAST + "\n" +
+               "        inet6 fe80::215:5dff:fe00:1a2b  prefixlen 64  scopeid 0x20<link>\n" +
+               "        ether " + FakeEnv.ETH0_MAC + "  txqueuelen 1000  (Ethernet)\n" +
+               "        RX packets 18492653  bytes 21412405712 (21.4 GB)\n" +
+               "        RX errors 0  dropped 0  overruns 0  frame 0\n" +
+               "        TX packets 15248931  bytes 8982341231 (8.9 GB)\n" +
+               "        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0\n\n" +
+               "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n" +
+               "        inet 127.0.0.1  netmask 255.0.0.0\n" +
+               "        loop  txqueuelen 1000  (Local Loopback)";
     }
 
-    private String ipCmd(List<String> args) {
+    private String ipCmd(SessionState st, String cmd, List<String> args) {
         if (args.isEmpty()) return "Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }";
         String sub = args.getFirst();
         if (sub.equals("addr") || sub.equals("a")) {
@@ -958,27 +969,26 @@ public class CommandProcessor {
                     1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
                         inet 127.0.0.1/8 scope host lo
                     2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
-                        inet 10.23.76.15/24 brd 10.0.0.255 scope global eth0""";
+                        inet """ + FakeEnv.ETH0_IP + "/24 brd " + FakeEnv.ETH0_BROADCAST + " scope global eth0";
         }
         if (sub.equals("route") || sub.equals("r")) {
-            return "default via 10.0.0.1 dev eth0 proto static\n10.0.0.0/24 dev eth0 proto kernel scope link src 10.23.76.15";
+            return "default via " + FakeEnv.GATEWAY + " dev eth0 proto static\n10.23.76.0/24 dev eth0 proto kernel scope link src " + FakeEnv.ETH0_IP;
         }
-        return "";
+        return aiFallbackSilent(st, cmd, "ip"); // ip link/neigh 等其他子命令：AI 仿真
     }
 
     private String netstat() {
-        return """
-                Active Internet connections (servers and established)
-                Proto Recv-Q Send-Q Local Address           Foreign Address         State
-                tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN
-                tcp        0      0 0.0.0.0:3306            0.0.0.0:*               LISTEN
-                tcp        0      0 0.0.0.0:80              0.0.0.0:*               LISTEN
-                tcp        0    288 10.23.76.15:22          10.0.0.99:51220         ESTABLISHED
-                udp        0      0 0.0.0.0:68              0.0.0.0:*""";
+        return "Active Internet connections (servers and established)\n" +
+               "Proto Recv-Q Send-Q Local Address           Foreign Address         State\n" +
+               "tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN\n" +
+               "tcp        0      0 0.0.0.0:3306            0.0.0.0:*               LISTEN\n" +
+               "tcp        0      0 0.0.0.0:80              0.0.0.0:*               LISTEN\n" +
+               "tcp        0    288 " + FakeEnv.ETH0_IP + ":22          10.23.76.99:51220         ESTABLISHED\n" +
+               "udp        0      0 0.0.0.0:68              0.0.0.0:*";
     }
 
     private String apt(List<String> args) {
-        if (args.isEmpty()) return "apt 2.4.11 (amd64)";
+        if (args.isEmpty()) return "apt " + FakeEnv.APT + " (amd64)";
         if (args.getFirst().equals("update")) {
             return "Hit:1 http://archive.ubuntu.com/ubuntu jammy InRelease\n" +
                    "Get:2 http://archive.ubuntu.com/ubuntu jammy-updates InRelease [119 kB]\n" +
@@ -988,13 +998,13 @@ public class CommandProcessor {
         return "Reading package lists... Done\nBuilding dependency tree... Done\n0 upgraded, 0 newly installed, 0 to remove and 3 not upgraded.";
     }
 
-    private String crontab(List<String> args) {
+    private String crontab(SessionState st, String cmd, List<String> args) {
         if (args.isEmpty()) return "usage error: file name must be specified for replace";
         if (args.getFirst().equals("-l")) {
             return "17 *\t* * *\troot    cd / && run-parts --report /etc/cron.hourly\n" +
                    "25 6\t* * *\troot\ttest -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.daily )";
         }
-        return "";
+        return aiFallbackSilent(st, cmd, "crontab"); // -e/-r 等其他用法：AI 仿真
     }
 
     private String find(SessionState st, List<String> args) {
@@ -1019,8 +1029,8 @@ public class CommandProcessor {
     /* ------------------------------------------------------------------ */
 
     private String hostnameCmd(List<String> args) {
-        if (args.contains("-I") || args.contains("--all-ip-addresses")) return "10.23.76.15";
-        if (args.contains("-i")) return "10.23.76.15";
+        if (args.contains("-I") || args.contains("--all-ip-addresses")) return FakeEnv.ETH0_IP;
+        if (args.contains("-i")) return FakeEnv.ETH0_IP;
         if (args.contains("-f")) return hostname + ".internal";
         return hostname;
     }
@@ -1033,22 +1043,22 @@ public class CommandProcessor {
     private String ping(List<String> args) {
         String host = firstNonFlag(args);
         if (host.isEmpty()) return "ping: usage error: Destination address required";
-        return "PING " + host + " (93.184.216.34) 56(84) bytes of data.\n" +
+        return "PING " + host + " (" + FakeEnv.WAN_IP + ") 56(84) bytes of data.\n" +
                "\n--- " + host + " ping statistics ---\n" +
                "4 packets transmitted, 0 received, 100% packet loss, time 3055ms";
     }
 
     private String dig(List<String> args) {
         String host = firstNonFlag(args);
-        if (host.isEmpty()) return "; <<>> DiG 9.18.18-0ubuntu0.22.04.1-Ubuntu <<>>\n;; global options: +cmd";
-        return "; <<>> DiG 9.18.18-0ubuntu0.22.04.1-Ubuntu <<>> " + host + "\n" +
+        if (host.isEmpty()) return "; <<>> DiG " + FakeEnv.DIG + " <<>>\n;; global options: +cmd";
+        return "; <<>> DiG " + FakeEnv.DIG + " <<>> " + host + "\n" +
                ";; global options: +cmd\n" +
                ";; Got answer:\n" +
                ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: " + (10000 + ThreadLocalRandom.current().nextInt(50000)) + "\n" +
                ";; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1\n\n" +
                ";; QUESTION SECTION:\n;" + host + ".\t\t\t\tIN\tA\n\n" +
-               ";; ANSWER SECTION:\n" + host + ".\t\t54\tIN\tA\t93.184.216.34\n\n" +
-               ";; Query time: " + (5 + ThreadLocalRandom.current().nextInt(40)) + " msec\n;; SERVER: 10.0.0.2#53(10.0.0.2) (UDP)\n;; WHEN: " +
+               ";; ANSWER SECTION:\n" + host + ".\t\t54\tIN\tA\t" + FakeEnv.WAN_IP + "\n\n" +
+               ";; Query time: " + (5 + ThreadLocalRandom.current().nextInt(40)) + " msec\n;; SERVER: " + FakeEnv.DNS + "#53(" + FakeEnv.DNS + ") (UDP)\n;; WHEN: " +
                LocalDateTime.now().format(FMT_CTIME) +
                "\n;; MSG SIZE  rcvd: 55";
     }
@@ -1056,8 +1066,8 @@ public class CommandProcessor {
     private String nslookup(List<String> args) {
         String host = firstNonFlag(args);
         if (host.isEmpty()) return "> ";
-        return "Server:\t\t10.0.0.2\nAddress:\t10.0.0.2#53\n\nNon-authoritative answer:\nName:\t" + host +
-               "\nAddress: 93.184.216.34";
+        return "Server:\t\t" + FakeEnv.DNS + "\nAddress:\t" + FakeEnv.DNS + "#53\n\nNon-authoritative answer:\nName:\t" + host +
+               "\nAddress: " + FakeEnv.WAN_IP;
     }
 
     private String yum(List<String> args) {
@@ -1071,8 +1081,8 @@ public class CommandProcessor {
                    "||/ Name           Version          Architecture Description\n" +
                    "+++-==============-================-============-=================================\n" +
                    "ii  bash           5.1-6ubuntu1     amd64        GNU Bourne Again SHell\n" +
-                   "ii  openssh-server 1:8.9p1-3ubuntu0 amd64        secure shell (SSH) server\n" +
-                   "ii  mysql-server   8.0.35-0ubuntu0. amd64        MySQL database server (metapackage)";
+                   "ii  openssh-server 1:" + FakeEnv.OPENSSH + "-3ubuntu0 amd64        secure shell (SSH) server\n" +
+                   "ii  mysql-server   " + FakeEnv.MYSQL + "-0ubuntu0. amd64        MySQL database server (metapackage)";
         }
         return "dpkg: error: need an action option";
     }
@@ -1164,19 +1174,19 @@ public class CommandProcessor {
     }
 
     private String mount() {
-        return "/dev/sda1 on / type ext4 (rw,relatime,errors=remount-ro)\n" +
+        return FakeEnv.DISK_ROOT_DEV + " on / type ext4 (rw,relatime,errors=remount-ro)\n" +
                "proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)\n" +
                "sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime)\n" +
                "tmpfs on /dev/shm type tmpfs (rw,nosuid,nodev)\n" +
-               "/dev/sdb1 on /data type ext4 (rw,relatime)";
+               FakeEnv.DISK_DATA_DEV + " on /data type ext4 (rw,relatime)";
     }
 
     private String lsblk() {
         return "NAME    MAJ:MIN RM SIZE RO TYPE MOUNTPOINT\n" +
-               "sda       8:0    0  80G  0 disk\n" +
-               "└─sda1    8:1    0  80G  0 part /\n" +
-               "sdb       8:16   0 100G  0 disk\n" +
-               "└─sdb1    8:17   0 100G  0 part /data";
+               "sda       8:0    0  " + FakeEnv.DISK_ROOT_SIZE + "  0 disk\n" +
+               "└─sda1    8:1    0  " + FakeEnv.DISK_ROOT_SIZE + "  0 part /\n" +
+               "sdb       8:16   0 " + FakeEnv.DISK_DATA_SIZE + "  0 disk\n" +
+               "└─sdb1    8:17   0 " + FakeEnv.DISK_DATA_SIZE + "  0 part /data";
     }
 
     private String lsof() {
@@ -1196,12 +1206,12 @@ public class CommandProcessor {
         return "";
     }
 
-    private String python(SessionState st, List<String> args) {
-        // python -c "code"：重点记录，常见反弹shell载荷
+    private String python(SessionState st, String cmd, List<String> args) {
+        // python -c "code"：重点记录，常见反弹shell载荷；输出交 AI 仿真（多数载荷有回显）
         int ci = args.indexOf("-c");
         if (ci >= 0 && ci + 1 < args.size()) {
             logger.command(st.sessionId, st.ip, st.username, "[可疑脚本] python -c " + args.get(ci + 1));
-            return "";
+            return aiFallbackSilent(st, cmd, "python3");
         }
         if (!args.isEmpty() && !args.getFirst().startsWith("-") && args.getFirst().endsWith(".py")) {
             VNode f = st.fs.resolve(st.cwd, args.getFirst());
@@ -1209,28 +1219,28 @@ public class CommandProcessor {
                 return "python3: can't open file '" + args.getFirst() + "': [Errno 2] No such file or directory";
             }
             logger.command(st.sessionId, st.ip, st.username, "[可疑脚本] python " + args.getFirst());
-            return "";
+            return aiFallbackSilent(st, cmd, "python3");
         }
-        if (args.contains("--version") || args.contains("-V")) return "Python 3.10.12";
+        if (args.contains("--version") || args.contains("-V")) return "Python " + FakeEnv.PYTHON;
         return ""; // 交互模式静默挂起
     }
 
-    private String javaCmd(List<String> args) {
-        if (args.contains("-version") || args.isEmpty()) {
-            return "openjdk version \"17.0.9\" 2023-10-17\nOpenJDK Runtime Environment (build 17.0.9+9-Ubuntu-122.04)\nOpenJDK 64-Bit Server VM (build 17.0.9+9-Ubuntu-122.04, mixed mode, sharing)";
-        }
-        return "";
+    private String javaCmd(SessionState st, String cmd, List<String> args) {
+        if (args.isEmpty()) args = List.of("-version"); // 无参按 -version 处理，保持原行为
+        String v = devToolVersion("java", args);
+        if (v != null) return v;
+        return aiFallbackSilent(st, cmd, "java"); // java -jar/-cp 等：输出交 AI 仿真
     }
 
     private String lscpu() {
-        return "Architecture:            x86_64\n" +
+        return "Architecture:            " + FakeEnv.ARCH + "\n" +
                "  CPU op-mode(s):        32-bit, 64-bit\n" +
                "  Address sizes:         46 bits physical, 48 bits virtual\n" +
                "  Byte Order:            Little Endian\n" +
-               "CPU(s):                  4\n" +
+               "CPU(s):                  " + FakeEnv.CPU_COUNT + "\n" +
                "  On-line CPU(s) list:   0-3\n" +
                "Vendor ID:               GenuineIntel\n" +
-               "  Model name:            Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz\n" +
+               "  Model name:            " + FakeEnv.CPU_MODEL + "\n" +
                "    CPU family:          6\n" +
                "    Model:               106\n" +
                "    Thread(s) per core:  2\n" +
@@ -1281,12 +1291,12 @@ public class CommandProcessor {
         return sb.toString().stripTrailing();
     }
 
-    private String openssl(List<String> args) {
-        if (!args.isEmpty() && args.getFirst().equals("version")) return "OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)";
-        if (args.contains("genrsa") || args.contains("req") || args.contains("x509")) {
-            return "";
+    private String openssl(SessionState st, String cmd, List<String> args) {
+        if (!args.isEmpty() && args.getFirst().equals("version")) {
+            return "OpenSSL " + FakeEnv.OPENSSL + " 15 Mar 2022 (Library: OpenSSL " + FakeEnv.OPENSSL + " 15 Mar 2022)";
         }
-        return "";
+        // genrsa/req/x509/s_client 等子命令：输出交 AI 仿真（genrsa 真实有 stderr 进度输出）
+        return aiFallbackSilent(st, cmd, "openssl");
     }
 
     private String useradd(SessionState st, List<String> args) {
@@ -1296,16 +1306,16 @@ public class CommandProcessor {
         return "";
     }
 
-    private String getent(List<String> args) {
+    private String getent(SessionState st, String cmd, List<String> args) {
         if (args.isEmpty()) return "";
         if (args.getFirst().equals("passwd")) {
             String user = args.size() > 1 ? args.get(1) : "root";
             return user + ":x:" + ("root".equals(user) ? "0:0:root:/root:/bin/bash" : "1000:1000:" + user + ":/home/" + user + ":/bin/bash");
         }
         if (args.getFirst().equals("hosts") && args.size() > 1) {
-            return "93.184.216.34     " + args.get(1);
+            return FakeEnv.WAN_IP + "     " + args.get(1);
         }
-        return "";
+        return aiFallbackSilent(st, cmd, "getent"); // group/shadow/services 等：AI 仿真
     }
 
     private String iptables(List<String> args) {
@@ -1317,11 +1327,11 @@ public class CommandProcessor {
         return "";
     }
 
-    private String ufw(List<String> args) {
+    private String ufw(SessionState st, String cmd, List<String> args) {
         if (!args.isEmpty() && args.getFirst().equals("status")) {
             return "Status: active\n\nTo                         Action      From\n--                         ------      ----\n22/tcp                     ALLOW       Anywhere\n80/tcp                     ALLOW       Anywhere\n22/tcp (v6)                ALLOW       Anywhere (v6)\n80/tcp (v6)                ALLOW       Anywhere (v6)";
         }
-        return "";
+        return aiFallbackSilent(st, cmd, "ufw"); // allow/deny/enable 等：AI 仿真（"Rule added" 等输出）
     }
 
     private String aliasCmd(List<String> args) {
@@ -1331,7 +1341,7 @@ public class CommandProcessor {
         return "";
     }
 
-    private String docker(List<String> args) {
+    private String docker(SessionState st, String cmd, List<String> args) {
         if (args.isEmpty()) return "Usage:  docker [OPTIONS] COMMAND";
         String sub = args.getFirst();
         if (sub.equals("ps") || sub.equals("container")) {
@@ -1342,12 +1352,17 @@ public class CommandProcessor {
             return "REPOSITORY   TAG       IMAGE ID       CREATED        SIZE\nnginx        latest    61395b4c586d   3 weeks ago    187MB";
         }
         if (sub.equals("version")) {
-            return "Client: Docker Engine - Community\n Version:           24.0.7\n API version:       1.43\n Go version:        go1.20.10";
+            return "Client: Docker Engine - Community\n Version:           " + FakeEnv.DOCKER +
+                   "\n API version:       " + FakeEnv.DOCKER_API + "\n Go version:        go1.20.10";
         }
-        return "";
+        // 其余子命令（pull/run/build/info/logs/exec/inspect/stats/network/volume/system 等）：
+        // 全栈开发者机器 docker 常驻使用，交 AI 仿真真实输出，AI 不可用回退空串
+        return aiFallbackSilent(st, cmd, "docker");
     }
 
-    private String kubectl(List<String> args) {
+    private String kubectl(SessionState st, String cmd, List<String> args) {
+        String v = devToolVersion("kubectl", args);
+        if (v != null) return v;
         if (args.isEmpty()) return "kubectl controls the Kubernetes cluster manager.";
         if (args.getFirst().equals("get") && args.contains("pods")) {
             return "NAME                     READY   STATUS    RESTARTS   AGE\nweb-6d9f5b7c8-x2k4p      1/1     Running   0          12d";
@@ -1362,18 +1377,19 @@ public class CommandProcessor {
         return "root";
     }
 
-    private String lsbRelease(List<String> args) {
+    private String lsbRelease(SessionState st, String cmd, List<String> args) {
         if (args.contains("-a") || args.contains("--all")) {
-            return "Distributor ID:\tUbuntu\nDescription:\tUbuntu 22.04.3 LTS\nRelease:\t22.04\nCodename:\tjammy";
+            return "Distributor ID:\tUbuntu\nDescription:\t" + FakeEnv.OS_DESC +
+                   "\nRelease:\t" + FakeEnv.OS_RELEASE + "\nCodename:\t" + FakeEnv.OS_CODENAME;
         }
-        return "";
+        return aiFallbackSilent(st, cmd, "lsb_release"); // -d/-r/-c 等单项查询：AI 仿真
     }
 
     private String neofetch() {
         return "            .-/+oossssoo+/-.               root@" + hostname + "\n" +
                "        `:+ssssssssssssssssss+:`           ------------\n" +
-               "      -+ssssssssssssssssssyyssss+-         OS: Ubuntu 22.04.3 LTS x86_64\n" +
-               "     /ssssssssssssssssssdMMMNysssso.       Kernel: 5.15.0-91-generic\n" +
+               "      -+ssssssssssssssssssyyssss+-         OS: " + FakeEnv.OS_DESC + " " + FakeEnv.ARCH + "\n" +
+               "     /ssssssssssssssssssdMMMNysssso.       Kernel: " + FakeEnv.KERNEL + "\n" +
                "    +sssssssssshdmmNNmmyNMMMMhssssss/      Uptime: 47 days, 3 hours\n" +
                "   .osssssshdmmNNMNNNMMMMNMMMMdssssssso    Shell: bash 5.1.16\n" +
                "  ossss+MMMNMMMNMMMMMMMMMMMMMMMN+sssssss   CPU: Intel Xeon Platinum 8375C (4) @ 2.90GHz\n" +
@@ -1473,18 +1489,97 @@ public class CommandProcessor {
     }
 
     /**
-     * 未知命令兜底：优先交给大模型生成仿真输出（携带会话上下文保证与攻击者操作连续），
-     * AI 未启用/不可用时回退本地 command not found；降级过程对攻击者不可感知。
+     * 调大模型生成仿真输出（携带最近 3 条历史作为会话上下文，让模型输出与前序操作连贯）。
+     * AI 未启用/不可用/失败时返回 null，由调用方决定回退策略。
+     */
+    private String aiGenerate(SessionState st, String cmd) {
+        if (ai == null) return null;
+        int n = st.history.size();
+        List<String> recent = st.history.subList(Math.max(0, n - 4), Math.max(0, n - 1));
+        return ai.generateShellOutput(st.hostname, st.username, st.cwd, recent, cmd);
+    }
+
+    /**
+     * 未知命令回退：优先交给大模型生成仿真输出，AI 未启用/不可用时回退本地 command not found；
+     * 降级过程对攻击者不可感知。
      */
     private String aiFallback(SessionState st, String cmd, String name) {
-        if (ai != null) {
-            // 最近 3 条历史（不含当前命令）作为会话上下文，让模型输出与前序操作连贯
-            int n = st.history.size();
-            List<String> recent = st.history.subList(Math.max(0, n - 4), Math.max(0, n - 1));
-            String out = ai.generateShellOutput(st.hostname, st.username, st.cwd, recent, cmd);
-            if (out != null) return out; // 空串合法：部分命令本身无输出
-        }
-        return defaultCmd(name);
+        String out = aiGenerate(st, cmd);
+        return out != null ? out : defaultCmd(name); // 空串合法：部分命令本身无输出
+    }
+
+    /**
+     * 已安装但本地无专门仿真的命令：优先大模型生成真实输出，AI 不可用时回退空串。
+     * 此类命令多数成功时本就无输出，空串不穿帮；也避免与“全栈开发者机器已装开发工具”
+     * 的人设矛盾（不能回 command not found）。
+     */
+    private String aiFallbackSilent(SessionState st, String cmd, String name) {
+        String out = aiGenerate(st, cmd);
+        return out != null ? out : "";
+    }
+
+    /**
+     * 开发工具版本查询：输出与 FakeEnv 常量（即 AI 提示词中的软件清单）严格一致，
+     * 攻击者用 <tool> --version 与 AI 仿真输出交叉验证时不会穿帮。
+     * 非版本查询返回 null，由调用方继续处理。
+     */
+    private String devToolVersion(String name, List<String> args) {
+        boolean versionQuery = args.stream().anyMatch(a ->
+                a.equals("-v") || a.equals("-V") || a.equals("--version") || a.equals("version") || a.equals("-version"));
+        if (!versionQuery) return null;
+        return switch (name) {
+            case "git" -> "git version " + FakeEnv.GIT;
+            case "python", "python3" -> "Python " + FakeEnv.PYTHON;
+            case "pip", "pip3" -> "pip " + FakeEnv.PIP + " from /usr/lib/python3/dist-packages/pip (python 3.10)";
+            case "node" -> FakeEnv.NODE;
+            case "npm" -> FakeEnv.NPM;
+            case "yarn" -> FakeEnv.YARN;
+            case "go" -> "go version " + FakeEnv.GO + " linux/amd64";
+            case "cargo" -> FakeEnv.CARGO;
+            case "rustc" -> FakeEnv.RUSTC;
+            case "javac" -> "javac " + FakeEnv.JAVA;
+            case "java" -> "openjdk version \"" + FakeEnv.JAVA + "\" 2023-10-17\n"
+                    + "OpenJDK Runtime Environment (build " + FakeEnv.JAVA + "+9-Ubuntu-122.04)\n"
+                    + "OpenJDK 64-Bit Server VM (build " + FakeEnv.JAVA + "+9-Ubuntu-122.04, mixed mode, sharing)";
+            case "mvn" -> "Apache Maven " + FakeEnv.MAVEN + " (bc0240f3c744dd6b6ec292087cd0f8173e3c8c47)\n"
+                    + "Maven home: /usr/share/maven\nJava version: " + FakeEnv.JAVA
+                    + ", vendor: Ubuntu, runtime: /usr/lib/jvm/java-17-openjdk-amd64\n"
+                    + "Default locale: en_US, platform encoding: UTF-8\n"
+                    + "OS name: \"linux\", version: \"" + FakeEnv.KERNEL + "\", arch: \"amd64\"";
+            case "gradle" -> "Gradle " + FakeEnv.GRADLE + "\n\nBuild time:   2023-11-29 14:00:00 UTC\n"
+                    + "JVM:          " + FakeEnv.JAVA + " (Ubuntu " + FakeEnv.JAVA + "+9-Ubuntu-122.04)\n"
+                    + "OS:           Linux " + FakeEnv.KERNEL + " amd64";
+            case "php" -> "PHP " + FakeEnv.PHP + " (cli) (built: Nov  9 2023 15:16:18) ( NTS )\n"
+                    + "Copyright (c) The PHP Group\nZend Engine v4.1.2, Copyright (c) Zend Technologies";
+            case "composer" -> "Composer version " + FakeEnv.COMPOSER + " 2023-12-08 14:14:57";
+            case "ruby" -> FakeEnv.RUBY;
+            case "gem" -> FakeEnv.GEM;
+            case "perl" -> "This is perl 5, version 34, subversion 0 (" + FakeEnv.PERL + ") built for x86_64-linux-gnu-thread-multi";
+            case "lua" -> "Lua " + FakeEnv.LUA + "  Copyright (C) 1994-2023 Lua.org, PUC-Rio";
+            case "gcc", "cc", "g++" -> name + " (Ubuntu " + FakeEnv.GCC + "-1ubuntu1~22.04) " + FakeEnv.GCC + "\n"
+                    + "Copyright (C) 2021 Free Software Foundation, Inc.\n"
+                    + "This is free software; see the source for copying conditions.  There is NO\n"
+                    + "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.";
+            case "make" -> "GNU Make " + FakeEnv.MAKE + "\nBuilt for x86_64-pc-linux-gnu\n"
+                    + "Copyright (C) 1988-2022 Free Software Foundation, Inc.";
+            case "cmake" -> "cmake version " + FakeEnv.CMAKE + "\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).";
+            case "mysql", "mariadb" -> "mysql  Ver 8.0.35-0ubuntu0.22.04.2 for Linux on x86_64 ((Ubuntu))";
+            case "psql" -> "psql (PostgreSQL) " + FakeEnv.POSTGRES + " (Ubuntu " + FakeEnv.POSTGRES + "-0ubuntu0.22.04.1)";
+            case "redis-cli" -> "redis-cli " + FakeEnv.REDIS;
+            case "sqlite3" -> FakeEnv.SQLITE + " 2021-12-01 19:27:38 1f1c0102e6b2f4e1f4a1e0e6d0a1e2e3f4a5b6c7d8e9f0a1b2c3d4e5f6071829";
+            case "kubectl" -> "Client Version: " + FakeEnv.KUBECTL + "\nKustomize Version: v5.0.4-0.20230601165947-6ce0bf390ce3";
+            case "docker-compose" -> "Docker Compose version " + FakeEnv.DOCKER_COMPOSE;
+            default -> null;
+        };
+    }
+
+    /**
+     * 开发工具命令统一入口：版本查询走本地常量（与 AI 提示词同源），
+     * 其余子命令先交大模型仿真输出、失败回退空串。
+     */
+    private String devToolOrAi(SessionState st, String cmd, String name, List<String> args) {
+        String v = devToolVersion(name, args);
+        return v != null ? v : aiFallbackSilent(st, cmd, name);
     }
 
     private String defaultCmd(String name) {

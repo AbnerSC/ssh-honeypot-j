@@ -268,9 +268,18 @@ docker compose up -d
 
 启用前提：`AI_ENABLED=true` 且 `AI_BASE_URL`、`AI_MODEL_NAME` 非空，否则自动视为未启用。
 
-> 注意：伪 Shell 本地内置命令表优先于大模型——`ls`、`cat`、`systemctl`、`docker ps`、`apt` 等
-> 约两百个常见命令走本地硬编码响应，不消耗大模型请求；仅未命中命令表的未知命令
-> （如 `nmap`、`docker-compose`、`./malware` 等自定义工具）才交大模型仿真。
+> **命令路由规则**（优先级从高到低）：
+> 1. **本地专门仿真**：`ls`、`cat`、`systemctl`、`docker ps`、`apt`、`ifconfig` 等约两百个常见命令走本地硬编码响应，不消耗大模型请求；
+> 2. **版本查询本地常量**：`node -v`、`git --version`、`mvn -v`、`gcc --version`、`python3 --version` 等开发工具版本命令返回 `FakeEnv` 常量，与大模型提示词同源，交叉验证不穿帮；
+> 3. **AI 仿真 + 空串回退**：`docker pull`、`npm install`、`make`、`rsync`、`sed` 等已安装但本地无专门仿真的命令，优先交大模型生成真实输出，AI 不可用时回退空串（此类命令成功时多数本就无输出）；
+> 4. **AI 仿真 + not found 回退**：完全未知的命令（如 `./malware`、`nmap`）交大模型仿真，AI 不可用时回退本地 `command not found`。
+>
+> **环境人设统一**：蜜罐伪装为一台全栈开发者的 Ubuntu 22.04 服务器，开发工具链齐备
+> （docker/docker-compose/node/npm/go/rust/maven/gradle/php/composer/ruby/python 等）；
+> 渗透测试类工具（nmap/hydra/sqlmap/tcpdump 等）未安装，大模型对其如实回 `command not found`。
+> 所有环境硬事实（硬件/网络/用户/软件版本）集中定义在 `org.open.scdm.honeypot.env.FakeEnv`，
+> 本地命令输出与大模型 systemPrompt 同源引用，攻击者用任意命令交叉验证均口径一致。
+>
 > 验证 AI 是否生效可看容器启动日志：环境变量覆盖与「AI 命令仿真已启用」均有输出。
 
 登录：
