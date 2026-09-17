@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -249,7 +250,7 @@ public class HoneypotConfig {
         /** 单条输出最大字符数：超长截断，防长输出撑爆小堆内存 */
         private int max_output_chars = 8192;
         /** 全局并发请求上限：超出的命令立即降级不排队，防大模型服务被打爆 */
-        private int max_concurrent = 4;
+        private int max_concurrent = 1;
         /** 连续失败达到该次数后触发熔断 */
         private int failure_threshold = 3;
         /** 熔断时长（秒）：期间不再请求 AI，未知命令直接本地兜底 */
@@ -280,22 +281,112 @@ public class HoneypotConfig {
 
     /**
      * 从指定路径加载配置；文件不存在时使用内置默认值。
+     * 加载完成后应用 AI 配置环境变量覆盖（优先级：环境变量 > 配置文件 > 默认值）。
      */
     public static HoneypotConfig load(String path) throws IOException {
         Path file = Path.of(path);
+        HoneypotConfig config;
         if (!Files.exists(file)) {
             System.out.println("未找到配置文件 " + file.toAbsolutePath() + "，使用默认配置。");
-            return new HoneypotConfig();
-        }
-
-        LoaderOptions options = new LoaderOptions();
-        Yaml yaml = new Yaml(new Constructor(HoneypotConfig.class, options));
-        try (InputStream in = Files.newInputStream(file)) {
-            HoneypotConfig config = yaml.load(in);
-            if (config == null) {
-                config = new HoneypotConfig();
+            config = new HoneypotConfig();
+        } else {
+            LoaderOptions options = new LoaderOptions();
+            Yaml yaml = new Yaml(new Constructor(HoneypotConfig.class, options));
+            try (InputStream in = Files.newInputStream(file)) {
+                config = yaml.load(in);
+                if (config == null) {
+                    config = new HoneypotConfig();
+                }
             }
-            return config;
+        }
+        config.applyAiEnvOverrides();
+        return config;
+    }
+
+    /**
+     * AI 配置环境变量覆盖（Docker/compose 部署免挂载配置文件）。
+     * 优先级：环境变量（存在且非空）> config.yaml > 代码默认值。
+     * <p>
+     * 变量名与 config.yaml ai 段键名一一对应（大写 + AI_ 前缀）：
+     * AI_ENABLED、AI_BASE_URL、AI_API_KEY、AI_MODEL_NAME、AI_ENABLE_THINKING、
+     * AI_TIMEOUT_SECONDS、AI_MAX_OUTPUT_CHARS、AI_MAX_CONCURRENT、
+     * AI_FAILURE_THRESHOLD、AI_COOLDOWN_SECONDS。
+     * 布尔/整数解析失败时忽略该项并打印告警；api_key 的值不回显日志。
+     */
+    private void applyAiEnvOverrides() {
+        Ai a = this.ai;
+        List<String> applied = new ArrayList<>();
+        String v;
+        if ((v = env("AI_ENABLED")) != null) {
+            a.setEnabled(parseBool("AI_ENABLED", v, a.isEnabled()));
+            applied.add("AI_ENABLED=" + a.isEnabled());
+        }
+        if ((v = env("AI_BASE_URL")) != null) {
+            a.setBase_url(v);
+            applied.add("AI_BASE_URL=" + v);
+        }
+        if ((v = env("AI_API_KEY")) != null) {
+            a.setApi_key(v);
+            applied.add("AI_API_KEY=***");
+        }
+        if ((v = env("AI_MODEL_NAME")) != null) {
+            a.setModel_name(v);
+            applied.add("AI_MODEL_NAME=" + v);
+        }
+        if ((v = env("AI_ENABLE_THINKING")) != null) {
+            a.setEnable_thinking(parseBool("AI_ENABLE_THINKING", v, a.isEnable_thinking()));
+            applied.add("AI_ENABLE_THINKING=" + a.isEnable_thinking());
+        }
+        if ((v = env("AI_TIMEOUT_SECONDS")) != null) {
+            a.setTimeout_seconds(parseInt("AI_TIMEOUT_SECONDS", v, a.getTimeout_seconds()));
+            applied.add("AI_TIMEOUT_SECONDS=" + a.getTimeout_seconds());
+        }
+        if ((v = env("AI_MAX_OUTPUT_CHARS")) != null) {
+            a.setMax_output_chars(parseInt("AI_MAX_OUTPUT_CHARS", v, a.getMax_output_chars()));
+            applied.add("AI_MAX_OUTPUT_CHARS=" + a.getMax_output_chars());
+        }
+        if ((v = env("AI_MAX_CONCURRENT")) != null) {
+            a.setMax_concurrent(parseInt("AI_MAX_CONCURRENT", v, a.getMax_concurrent()));
+            applied.add("AI_MAX_CONCURRENT=" + a.getMax_concurrent());
+        }
+        if ((v = env("AI_FAILURE_THRESHOLD")) != null) {
+            a.setFailure_threshold(parseInt("AI_FAILURE_THRESHOLD", v, a.getFailure_threshold()));
+            applied.add("AI_FAILURE_THRESHOLD=" + a.getFailure_threshold());
+        }
+        if ((v = env("AI_COOLDOWN_SECONDS")) != null) {
+            a.setCooldown_seconds(parseInt("AI_COOLDOWN_SECONDS", v, a.getCooldown_seconds()));
+            applied.add("AI_COOLDOWN_SECONDS=" + a.getCooldown_seconds());
+        }
+        if (!applied.isEmpty()) {
+            System.out.println("AI 配置已按环境变量覆盖: " + String.join(", ", applied));
+        }
+    }
+
+    /** 取环境变量：null 或空白视为未设置返回 null（避免 compose 传空值覆盖配置文件） */
+    private static String env(String name) {
+        String v = System.getenv(name);
+        return (v == null || v.isBlank()) ? null : v.trim();
+    }
+
+    /** 宽容布尔解析（true/false/1/0/yes/no/on/off，忽略大小写），非法值告警并保留原配置 */
+    private static boolean parseBool(String name, String value, boolean fallback) {
+        return switch (value.toLowerCase(Locale.ROOT)) {
+            case "true", "1", "yes", "on" -> true;
+            case "false", "0", "no", "off" -> false;
+            default -> {
+                System.err.println("警告: 环境变量 " + name + "=" + value + " 不是合法布尔值，已忽略。");
+                yield fallback;
+            }
+        };
+    }
+
+    /** 整数解析，非法值告警并保留原配置 */
+    private static int parseInt(String name, String value, int fallback) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            System.err.println("警告: 环境变量 " + name + "=" + value + " 不是合法整数，已忽略。");
+            return fallback;
         }
     }
 

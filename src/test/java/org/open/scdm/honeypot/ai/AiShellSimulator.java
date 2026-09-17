@@ -32,6 +32,10 @@ import java.util.logging.SimpleFormatter;
  *     --config &lt;file&gt;   配置文件路径（默认 config.yaml）
  *     （默认）交互模式：模拟攻击者会话，任意输入命令实时观察输出，exit 退出
  * </pre>
+ * config.yaml 默认关闭 AI，测试时可设环境变量注入（优先级高于配置文件）：
+ * <pre>
+ *   AI_ENABLED=true AI_BASE_URL=http://127.0.0.1:18000 AI_MODEL_NAME=qwen3-2b
+ * </pre>
  * 测试日志隔离写入 target/ai-sim/，不污染 logs/ 生产日志。
  */
 public final class AiShellSimulator {
