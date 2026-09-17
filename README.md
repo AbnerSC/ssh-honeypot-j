@@ -268,6 +268,11 @@ docker compose up -d
 
 启用前提：`AI_ENABLED=true` 且 `AI_BASE_URL`、`AI_MODEL_NAME` 非空，否则自动视为未启用。
 
+> 注意：伪 Shell 本地内置命令表优先于大模型——`ls`、`cat`、`systemctl`、`docker ps`、`apt` 等
+> 约两百个常见命令走本地硬编码响应，不消耗大模型请求；仅未命中命令表的未知命令
+> （如 `nmap`、`docker-compose`、`./malware` 等自定义工具）才交大模型仿真。
+> 验证 AI 是否生效可看容器启动日志：环境变量覆盖与「AI 命令仿真已启用」均有输出。
+
 登录：
 ```angular2html
 地址：http://127.0.0.1:8080

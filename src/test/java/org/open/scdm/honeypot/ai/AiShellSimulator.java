@@ -51,7 +51,8 @@ public final class AiShellSimulator {
             new Scenario("cat /etc/passwd", "本地硬编码"),
             new Scenario("nmap -sS -T4 10.0.0.0/24", "AI 仿真（未装工具时模型如实回 not found）"),
             new Scenario("./kdevtmpfsi -o pool.supportxmr.com:3333", "AI 仿真（恶意样本名）"),
-            new Scenario("docker ps -a", "AI 仿真（生成容器列表）"),
+            new Scenario("docker ps -a", "本地硬编码（伪造容器列表）"),
+            new Scenario("docker-compose -v", "AI 仿真（未命中本地命令表）"),
             new Scenario("git log --oneline -3", "AI 仿真（携带前序命令上下文）")
     );
 

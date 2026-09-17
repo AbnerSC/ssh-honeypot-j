@@ -233,7 +233,8 @@ public class CommandProcessor {
             case "eval", "exec", "nohup", "disown", "bg", "fg", "jobs" -> "";
             case "screen", "tmux" -> "";
             case "docker" -> docker(args);
-            case "docker-compose" -> "";
+            // docker-compose 不做本地拦截：交 aiFallback 由大模型仿真（未启用时回退 command not found，
+            // 对 Ubuntu 22.04 同样真实：默认不含 compose v1，装了 v1 的主机模型会回版本号）
             case "kubectl" -> kubectl(args);
             case "mysql", "mariadb" -> "ERROR 1045 (28000): Access denied for user '" + (args.isEmpty() ? "root" : userOfDbArgs(args)) + "'@'localhost' (using password: YES)";
             case "psql" -> "psql: error: connection to server at \"localhost\" (127.0.0.1), port 5432 failed: Connection refused";
