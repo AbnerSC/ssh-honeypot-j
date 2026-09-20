@@ -8,6 +8,7 @@ import org.open.scdm.honeypot.shell.CommandProcessor;
 import org.open.scdm.honeypot.shell.FakeShell;
 import org.open.scdm.honeypot.shell.SessionState;
 import org.apache.sshd.common.session.Session;
+import org.apache.sshd.common.session.SessionListener;
 import org.apache.sshd.core.CoreModuleProperties;
 import org.apache.sshd.server.Environment;
 import org.apache.sshd.server.ExitCallback;
@@ -25,6 +26,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 /**
@@ -50,6 +52,11 @@ public class SshHoneypotServer {
     /** sessionId(ioSessionId) -> 登录用户名（auth 阶段写入，shell 阶段读取）；用 long 键避免每次 String 装箱与哈希开销 */
     private final Map<Long, String> sessionUsers = new ConcurrentHashMap<>();
 
+    /** 最大并发 SSH 会话数：pre-auth 连接即计入，超限直接断开（对应真实 sshd 的 MaxStartups 行为），防连接洪泛耗尽资源 */
+    private static final int MAX_SESSIONS = 50;
+    /** 当前并发会话计数（SessionListener 维护） */
+    private final AtomicInteger activeSessions = new AtomicInteger();
+
     public SshHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard, String hostname, AiClient ai) {
         this.port = port;
         this.fs = fs;
@@ -71,6 +78,21 @@ public class SshHoneypotServer {
         CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(sshd, 2);
         sshd.setKeyPairProvider(new SimpleGeneratorHostKeyProvider(Path.of("hostkey.ser")));
 
+        // 并发会话限流：新建会话即计数，超限立即关闭连接；sessionClosed 回调统一递减，保证计数平衡
+        sshd.addSessionListener(new SessionListener() {
+            @Override
+            public void sessionCreated(Session session) {
+                if (activeSessions.incrementAndGet() > MAX_SESSIONS) {
+                    session.close(true);
+                }
+            }
+
+            @Override
+            public void sessionClosed(Session session) {
+                activeSessions.decrementAndGet();
+            }
+        });
+
         // 密码认证：按密码本校验，所有尝试均记录日志；连续失败由 CredentialGuard 锁定源 IP
         sshd.setPasswordAuthenticator((username, password, session) -> {
             String ip = clientIp(session);
@@ -80,14 +102,25 @@ public class SshHoneypotServer {
             if (ok) {
                 sessionUsers.put(sessionKey(session), username);
                 logger.sessionOpen(sid, "ssh", ip, clientPort(session));
+            } else {
+                // 认证失败的连接同样纳入 sessions 生命周期（与 Telnet/数据库蜜罐一致）：
+                // 开即关、时长计 0，保证 Web 端会话统计能覆盖全部爆破源连接
+                logger.sessionOpen(sid, "ssh", ip, clientPort(session));
+                logger.sessionClose(sid, ip, 0);
             }
             return ok;
         });
 
-        // 公钥认证：记录指纹，拒绝（攻击者极少有合法公钥，拒绝更像真实主机）
+        // 公钥认证：记录指纹，拒绝（攻击者极少有合法公钥，拒绝更像真实主机）；
+        // 失败同样计入 CredentialGuard 锁定，防攻击者改用公钥爆破绕过失败锁定策略
         sshd.setPublickeyAuthenticator((username, key, session) -> {
-            logger.authAttempt(logger.newSessionId(), "ssh", clientIp(session),
+            String ip = clientIp(session);
+            guard.recordFailure(ip);
+            String sid = logger.newSessionId();
+            logger.authAttempt(sid, "ssh", ip,
                     username, "[pubkey:" + key.getAlgorithm() + "]", false);
+            logger.sessionOpen(sid, "ssh", ip, clientPort(session));
+            logger.sessionClose(sid, ip, 0);
             return false;
         });
 
@@ -198,11 +231,14 @@ public class SshHoneypotServer {
         public void start(ChannelSession ch, Environment env) {
             // 虚拟线程：exec 攻击通常短平快，虚拟线程创建/销毁成本可忽略
             thread = Thread.ofVirtual().name("ssh-exec").start(() -> {
+                long begin = System.currentTimeMillis();
+                Session session = channel.getSession();
+                String username = sessionUsers.getOrDefault(sessionKey(session), "root");
+                String ip = clientIp(session);
+                SessionState state = new SessionState(logger.newSessionId(), ip, username, fs, hostname);
+                // exec 会话同样记录生命周期（s_sessions 表覆盖 ssh-exec 攻击），结束时补记 session_close
+                logger.sessionOpen(state.sessionId, "ssh-exec", ip, clientPort(session));
                 try {
-                    Session session = channel.getSession();
-                    String username = sessionUsers.getOrDefault(sessionKey(session), "root");
-                    String ip = clientIp(session);
-                    SessionState state = new SessionState(logger.newSessionId(), ip, username, fs, hostname);
                     String result = processor.execute(state, command);
                     if (!CommandProcessor.EXIT_SIGNAL.equals(result) && result != null) {
                         // 明确使用 UTF-8（避免平台默认编码），且仅含 NONL 标记时才做拷贝
@@ -213,6 +249,7 @@ public class SshHoneypotServer {
                     }
                 } catch (Exception ignored) {
                 } finally {
+                    logger.sessionClose(state.sessionId, ip, System.currentTimeMillis() - begin);
                     callback.onExit(0);
                 }
             });

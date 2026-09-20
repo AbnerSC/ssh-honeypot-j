@@ -80,25 +80,40 @@ public class CredentialGuard {
             failCounts.remove(ip);
             lastFailAt.remove(ip);
         } else {
-            long now = System.currentTimeMillis();
-            Long prev = lastFailAt.get(ip);
-            // 距上次失败已超过窗口，则视为新的一轮，重置计数
-            if (prev != null && now - prev > windowMillis) {
-                failCounts.remove(ip);
-            }
-            int n = failCounts.merge(ip, 1, Integer::sum);
-            lastFailAt.put(ip, now);
-            if (n >= maxFailures) {
-                long until = now + lockMillis;
-                lockedUntil.put(ip, until);
-                failCounts.remove(ip);
-                lastFailAt.remove(ip);
-                LOG.warning("源 IP " + ip + " 在 " + (windowMillis / 60_000) + " 分钟内连续登录失败 " +
-                        n + " 次，锁定 " + (lockMillis / 60_000) + " 分钟");
-                if (logger != null) logger.ipLocked(ip, until);
-            }
+            countFailure(ip);
         }
         return ok;
+    }
+
+    /**
+     * 记录一次认证失败并按窗口累计，达到阈值即锁定源 IP。
+     * 供 SSH 公钥认证等无密码校验路径复用，防止攻击者换认证方式绕过失败锁定策略。
+     */
+    public synchronized void recordFailure(String ip) {
+        sweepExpired();
+        if (isLocked(ip)) return;
+        countFailure(ip);
+    }
+
+    /** 窗口内累计失败计数并触发锁定（调用方需已确认未锁定） */
+    private void countFailure(String ip) {
+        long now = System.currentTimeMillis();
+        Long prev = lastFailAt.get(ip);
+        // 距上次失败已超过窗口，则视为新的一轮，重置计数
+        if (prev != null && now - prev > windowMillis) {
+            failCounts.remove(ip);
+        }
+        int n = failCounts.merge(ip, 1, Integer::sum);
+        lastFailAt.put(ip, now);
+        if (n >= maxFailures) {
+            long until = now + lockMillis;
+            lockedUntil.put(ip, until);
+            failCounts.remove(ip);
+            lastFailAt.remove(ip);
+            LOG.warning("源 IP " + ip + " 在 " + (windowMillis / 60_000) + " 分钟内连续登录失败 " +
+                    n + " 次，锁定 " + (lockMillis / 60_000) + " 分钟");
+            if (logger != null) logger.ipLocked(ip, until);
+        }
     }
 
     /** 分钟级清扫：移除失败计数窗口外与锁定已过期的 IP 条目（authenticate 持锁调用，无并发问题） */

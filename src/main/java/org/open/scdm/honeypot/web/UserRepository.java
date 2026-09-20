@@ -26,6 +26,10 @@ import javax.crypto.spec.PBEKeySpec;
  * <p>
  * 与攻击日志共用同一 SQLite 文件（sys_users 表，WAL 模式下与蜜罐写入互不阻塞）。
  * 口令以 PBKDF2-HMAC-SHA256 加盐哈希存储，格式 pbkdf2-sha256$迭代次数$salt$hash。
+ * <p>
+ * 连接安全说明：登录/改密/用户管理会被 Jetty 请求线程池并发调用，而 sqlite-jdbc
+ * 的单个 Connection 非线程安全，故按操作开启独立短连接（打开为微秒级开销），
+ * 规避并发复用同一连接的锁冲突与原生层异常；写冲突由 busy_timeout 吸收。
  */
 public class UserRepository implements AutoCloseable {
 
@@ -38,31 +42,41 @@ public class UserRepository implements AutoCloseable {
     private static final String DEFAULT_ADMIN = "admin";
     private static final String DEFAULT_ADMIN_PASSWORD = "admin123";
 
-    private final Connection conn;
+    private final String dbUrl;
 
     public UserRepository(Path dbFile) throws SQLException {
-        this.conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.toAbsolutePath());
-        try (Statement st = conn.createStatement()) {
-            st.execute("PRAGMA busy_timeout=5000");
-            st.execute("PRAGMA cache_size=-600"); // 页缓存收紧至约 600KB，降低常驻原生内存
-            st.execute("""
-                    CREATE TABLE IF NOT EXISTS sys_users (
-                        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                        username      TEXT    NOT NULL UNIQUE,          -- 登录用户名
-                        password_hash TEXT    NOT NULL,                 -- PBKDF2 口令哈希
-                        role          TEXT    NOT NULL DEFAULT 'admin', -- admin / viewer
-                        status        INTEGER NOT NULL DEFAULT 1,       -- 1 启用 / 0 禁用
-                        must_change   INTEGER NOT NULL DEFAULT 0,       -- 1 下次登录强制改密
-                        created_at    TEXT    NOT NULL,
-                        last_login_at TEXT
-                    )""");
+        this.dbUrl = "jdbc:sqlite:" + dbFile.toAbsolutePath();
+        try (Connection conn = open()) {
+            try (Statement st = conn.createStatement()) {
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS sys_users (
+                            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                            username      TEXT    NOT NULL UNIQUE,          -- 登录用户名
+                            password_hash TEXT    NOT NULL,                 -- PBKDF2 口令哈希
+                            role          TEXT    NOT NULL DEFAULT 'admin', -- admin / viewer
+                            status        INTEGER NOT NULL DEFAULT 1,       -- 1 启用 / 0 禁用
+                            must_change   INTEGER NOT NULL DEFAULT 0,       -- 1 下次登录强制改密
+                            created_at    TEXT    NOT NULL,
+                            last_login_at TEXT
+                        )""");
+            }
         }
         bootstrapDefaultAdmin();
     }
 
+    /** 开启一个操作短连接（用户表读写频率低，短连接开销可忽略） */
+    private Connection open() throws SQLException {
+        Connection c = DriverManager.getConnection(dbUrl);
+        try (Statement st = c.createStatement()) {
+            st.execute("PRAGMA busy_timeout=5000");
+            st.execute("PRAGMA cache_size=-600"); // 页缓存收紧至约 600KB，降低常驻原生内存
+        }
+        return c;
+    }
+
     /** 首次部署无任何账号时自动创建默认管理员（强制首次改密），避免控制台不可用 */
     private void bootstrapDefaultAdmin() throws SQLException {
-        try (Statement st = conn.createStatement();
+        try (Connection conn = open(); Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM sys_users")) {
             if (rs.next() && rs.getInt(1) > 0) return;
         }
@@ -75,7 +89,7 @@ public class UserRepository implements AutoCloseable {
 
     /** 按用户名查找（含口令哈希，仅供登录校验用）；不存在返回 null */
     Map<String, Object> findByUsername(String username) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(
+        try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement(
                 "SELECT id, username, password_hash, role, status, must_change, created_at, last_login_at"
                         + " FROM sys_users WHERE username = ?")) {
             ps.setString(1, username);
@@ -86,7 +100,7 @@ public class UserRepository implements AutoCloseable {
     }
 
     public Map<String, Object> findById(long id) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(
+        try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement(
                 "SELECT id, username, password_hash, role, status, must_change, created_at, last_login_at"
                         + " FROM sys_users WHERE id = ?")) {
             ps.setLong(1, id);
@@ -99,7 +113,7 @@ public class UserRepository implements AutoCloseable {
     /** 账号列表（不含口令哈希） */
     public List<Map<String, Object>> listUsers() throws SQLException {
         List<Map<String, Object>> list = new ArrayList<>();
-        try (Statement st = conn.createStatement();
+        try (Connection conn = open(); Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(
                      "SELECT id, username, password_hash, role, status, must_change, created_at, last_login_at"
                              + " FROM sys_users ORDER BY id")) {
@@ -124,7 +138,7 @@ public class UserRepository implements AutoCloseable {
     // ============================ 写入 ============================
 
     public long createUser(String username, String password, String role, boolean mustChange) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(
+        try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement(
                 "INSERT INTO sys_users(username, password_hash, role, status, must_change, created_at)"
                         + " VALUES(?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, username);
@@ -141,7 +155,8 @@ public class UserRepository implements AutoCloseable {
     }
 
     public boolean setStatus(long id, boolean enabled) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("UPDATE sys_users SET status = ? WHERE id = ?")) {
+        try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement(
+                "UPDATE sys_users SET status = ? WHERE id = ?")) {
             ps.setInt(1, enabled ? 1 : 0);
             ps.setLong(2, id);
             return ps.executeUpdate() > 0;
@@ -149,7 +164,7 @@ public class UserRepository implements AutoCloseable {
     }
 
     public boolean resetPassword(long id, String newPassword, boolean mustChange) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(
+        try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement(
                 "UPDATE sys_users SET password_hash = ?, must_change = ? WHERE id = ?")) {
             ps.setString(1, Passwords.hash(newPassword));
             ps.setInt(2, mustChange ? 1 : 0);
@@ -160,7 +175,7 @@ public class UserRepository implements AutoCloseable {
 
     /** 修改口令并清除强制改密标记（自助改密与管理员重置共用） */
     public boolean changePassword(long id, String newPassword) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(
+        try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement(
                 "UPDATE sys_users SET password_hash = ?, must_change = 0 WHERE id = ?")) {
             ps.setString(1, Passwords.hash(newPassword));
             ps.setLong(2, id);
@@ -169,21 +184,22 @@ public class UserRepository implements AutoCloseable {
     }
 
     public boolean deleteUser(long id) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM sys_users WHERE id = ?")) {
+        try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement(
+                "DELETE FROM sys_users WHERE id = ?")) {
             ps.setLong(1, id);
             return ps.executeUpdate() > 0;
         }
     }
 
     public long countAdmins() throws SQLException {
-        try (Statement st = conn.createStatement();
+        try (Connection conn = open(); Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM sys_users WHERE role = 'admin' AND status = 1")) {
             return rs.next() ? rs.getLong(1) : 0;
         }
     }
 
     public void recordLogin(long id) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement(
+        try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement(
                 "UPDATE sys_users SET last_login_at = ? WHERE id = ?")) {
             ps.setString(1, LocalDateTime.now().format(TS));
             ps.setLong(2, id);
@@ -191,9 +207,10 @@ public class UserRepository implements AutoCloseable {
         }
     }
 
+    /** 连接为按操作开关的短连接，无长期持有的资源需要释放（保留 AutoCloseable 以兼容调用方） */
     @Override
-    public void close() throws SQLException {
-        conn.close();
+    public void close() {
+        // no-op
     }
 
     /** PBKDF2-HMAC-SHA256 口令哈希工具（JDK 内置实现，无额外依赖） */

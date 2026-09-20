@@ -12,6 +12,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.HexFormat;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -56,18 +57,13 @@ public class MySqlHoneypotServer {
     private static final String SERVER_VERSION = "8.4.0";
     /** 认证插件：兼容性最好，绝大多数客户端/扫描器均支持 */
     private static final String AUTH_PLUGIN = "mysql_native_password";
-    /** 固定认证盐（20 字节）：客户端凭证不做校验，无需随机生成 */
-    private static final byte[] SALT = {
-            0x6a, 0x31, 0x5e, 0x24, 0x77, 0x2b, 0x69, 0x33,
-            0x4d, 0x1f, 0x08, 0x6c, 0x55, 0x41, 0x70, 0x2e,
-            0x36, 0x0d, 0x59, 0x18};
+    /** 认证盐随机源：真实 MySQL 每连接随机生成盐；固定盐可被客户端两次连接比对识破，是典型蜜罐指纹 */
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     /**
-     * 握手包完整协议帧（含 3 字节长度 + 序号 0 包头）与连接数超限错误包：
-     * 内容与连接无关，进程启动时构造一次复用。蜜罐面对海量扫描连接时，
-     * 每个连接都在重复构造同一份字节序列，缓存可显著减少 CPU 与 GC 压力。
+     * 连接数超限错误包：内容固定，启动时构造一次复用（海量扫描连接下避免每连接重复构造）；
+     * 握手包因携带每连接随机盐无法缓存，在 handleClient 中即时构造（百字节级，成本可忽略）。
      */
-    private static final byte[] HANDSHAKE = withPacketHeader(handshake(), 0);
     private static final byte[] TOO_MANY_CONNECTIONS = withPacketHeader(
             errBody(ER_TOO_MANY_CONNECTIONS, SQLSTATE_TOO_MANY_CONNECTIONS, "Too many connections"), 0);
 
@@ -131,7 +127,7 @@ public class MySqlHoneypotServer {
         try (socket) {
             socket.setSoTimeout(READ_TIMEOUT_MS);
             OutputStream out = socket.getOutputStream();
-            out.write(HANDSHAKE);
+            out.write(withPacketHeader(handshake(randomSalt()), 0));
             out.flush();
             byte[] resp = readPacket(socket);
             String[] cred = parseHandshakeResponse(resp);
@@ -180,14 +176,14 @@ public class MySqlHoneypotServer {
      * 构造 HandshakeV10 握手包：协议版本 10 + 服务器版本 + 认证盐 + 能力标志。
      * 不声明 CLIENT_SSL，避免诱导客户端发起 TLS 升级。
      */
-    private static byte[] handshake() {
+    private static byte[] handshake(byte[] salt) {
         int caps = CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION | 0x00080000 /* CLIENT_PLUGIN_AUTH */;
         ByteArrayOutputStream b = new ByteArrayOutputStream(128);
         b.write(0x0A);                                              // 协议版本 10（HandshakeV10）
         writeBytes(b, SERVER_VERSION.getBytes(StandardCharsets.US_ASCII));
         b.write(0x00);                                              // 版本号 NUL 终止
         writeBytes(b, new byte[]{0x00, 0x00, 0x01, 0x2A});          // 线程 ID（伪造）
-        writeBytes(b, SALT, 0, 8);                                  // auth-plugin-data 第 1 部分（8 字节）
+        writeBytes(b, salt, 0, 8);                                  // auth-plugin-data 第 1 部分（8 字节）
         b.write(0x00);                                              // 填充字节
         b.write(caps & 0xFF);                                       // 能力标志低 16 位（小端）
         b.write((caps >> 8) & 0xFF);
@@ -195,13 +191,20 @@ public class MySqlHoneypotServer {
         writeBytes(b, new byte[]{0x02, 0x00});                      // 状态标志 SERVER_STATUS_AUTOCOMMIT
         b.write((caps >> 16) & 0xFF);                               // 能力标志高 16 位（小端）
         b.write((caps >> 24) & 0xFF);
-        b.write(SALT.length + 1);                                   // auth-plugin-data 总长度（含终止符）
+        b.write(salt.length + 1);                                   // auth-plugin-data 总长度（含终止符）
         writeBytes(b, new byte[10]);                                // 保留字节（全 0）
-        writeBytes(b, SALT, 8, SALT.length - 8);                    // auth-plugin-data 第 2 部分（12 字节）
+        writeBytes(b, salt, 8, salt.length - 8);                    // auth-plugin-data 第 2 部分（12 字节）
         b.write(0x00);                                              // 第 2 部分 NUL 终止（凑满 13 字节）
         writeBytes(b, AUTH_PLUGIN.getBytes(StandardCharsets.US_ASCII));
         b.write(0x00);                                              // 插件名 NUL 终止
         return b.toByteArray();
+    }
+
+    /** 生成 20 字节随机认证盐（与 mysql_native_password 协议要求的盐长一致） */
+    private static byte[] randomSalt() {
+        byte[] salt = new byte[20];
+        RANDOM.nextBytes(salt);
+        return salt;
     }
 
     /** 读取一个完整 MySQL 包并返回负载；报文不合法（超大长度）时返回空数组 */

@@ -125,6 +125,9 @@ public class RedisHoneypotServer {
             for (int i = 0; i < MAX_COMMANDS; i++) {
                 String[] cmd = readCommand(in);
                 if (cmd == null || cmd.length == 0) break;
+                // 探测/诱导阶段收到的命令同样留痕（INFO/KEYS/CONFIG 等是重要 IOC，
+                // 与认证命令一并写入 commands 表，补全攻击行为画像；Redis 会话无用户名概念，置空）
+                logger.command(sessionId, ip, null, String.join(" ", cmd));
                 switch (cmd[0].toUpperCase(Locale.ROOT)) {
                     case "AUTH" -> {
                         if (cmd.length == 2) {                  // AUTH <password>：Redis 6+ 按默认用户认证

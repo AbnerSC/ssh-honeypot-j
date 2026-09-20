@@ -30,6 +30,10 @@ public class WebServer implements AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(WebServer.class.getName());
 
+    /** 请求体大小上限：本控制台请求体均为小 JSON（登录/改密/用户管理），超过即拒绝，
+     *  防恶意客户端提交超大 body 被全量读入内存（OOM）并撑爆审计表 */
+    private static final long MAX_BODY_BYTES = 1024 * 1024;
+
     private final Javalin app;
     private final LogRepository logRepo;
     private final UserRepository userRepo;
@@ -83,13 +87,24 @@ public class WebServer implements AutoCloseable {
             // 压缩策略用 Javalin 默认（gzip/brotli，超过阈值才压缩），ECharts 等大资源自动受益
             try {
                 // Jetty 12：ServletContextHandler 位于 ee10.servlet 包
-                config.jetty.modifyServletContextHandler(sc ->
-                        sc.getSessionHandler().setMaxInactiveInterval(sessionTimeoutMinutes * 60));
+                config.jetty.modifyServletContextHandler(sc -> {
+                    sc.getSessionHandler().setMaxInactiveInterval(sessionTimeoutMinutes * 60);
+                    // 会话 Cookie 加固：HttpOnly 阻断脚本窃取；SameSite=Lax 缓解跨站请求携带会话（CSRF）
+                    try {
+                        var cookieConfig = sc.getSessionHandler().getSessionCookieConfig();
+                        cookieConfig.setHttpOnly(true);
+                        cookieConfig.setAttribute("SameSite", "Lax");
+                    } catch (Throwable ignored) {
+                        // 容器不支持时退回默认行为，不影响启动
+                    }
+                });
             } catch (Exception ignored) {
                 // 会话超时设置失败时退回 Jetty 默认值，不影响启动
             }
 
             JavalinDefaultRoutingApi routes = config.routes;
+            // 请求体限额守卫：必须先于审计中间件注册——后者会读取并缓存整个请求体
+            routes.before(this::sizeGuard);
             // 审计中间件：before 记录起始时间与请求体，after 落库（Javalin 7 中 after 先于 before 执行）
             routes.before(ctx -> {
                 String p = ctx.path();
@@ -143,11 +158,28 @@ public class WebServer implements AutoCloseable {
     }
 
     /**
+     * 请求体大小守卫：按 Content-Length 预检，超限直接 413，避免大 body 进入内存与审计。
+     * （chunked 编码无该头时由各接口自身的 body 解析错误作最后防线）
+     */
+    private void sizeGuard(Context ctx) {
+        String cl = ctx.header("Content-Length");
+        if (cl == null) return;
+        try {
+            if (Long.parseLong(cl.trim()) > MAX_BODY_BYTES) {
+                throw new HttpResponseException(413, "请求体过大");
+            }
+        } catch (NumberFormatException ignored) {
+            // 非法 Content-Length 交由容器处理
+        }
+    }
+
+    /**
      * 登录守卫：登录接口与登录页静态资源放行，其余请求一律要求有效会话。
+     * 登录接口用精确匹配（equals），避免未来新增 /api/loginXXX 类路由时意外绕过鉴权。
      */
     private void authGuard(Context ctx) {
         String path = ctx.path();
-        if (path.startsWith("/api/login")) return;
+        if (path.equals("/api/login")) return;
         boolean isApi = path.startsWith("/api/");
         boolean publicStatic = !isApi && (path.equals("/login.html") || path.equals("/favicon.ico")
                 || path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/img/"));
@@ -158,7 +190,7 @@ public class WebServer implements AutoCloseable {
         }
     }
 
-    /** 审计中间件（after）：读取 before 阶段存入的请求起始时间与请求体，响应完成后落库 */
+    /** 审计中间件（after）：读取 before 阶段存入的请求起始时间与请求体（已限流限长），响应完成后落库 */
     private void auditMiddleware(Context ctx) {
         String path = ctx.path();
         if (!path.startsWith("/api/") || path.startsWith("/api/vendor/")) {

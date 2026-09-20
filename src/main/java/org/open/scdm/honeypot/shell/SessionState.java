@@ -24,17 +24,25 @@ public class SessionState {
     public SessionState(String sessionId, String ip, String username, VirtualFileSystem fs, String hostname) {
         this.sessionId = sessionId;
         this.ip = ip;
-        this.username = username;
+        // 用户名清洗：攻击者可提交任意字符串作用户名，未清洗的路径分隔符/控制字符
+        // 会污染提示符与 /home 目录结构
+        this.username = sanitizeUser(username);
         this.fs = fs;
         this.hostname = hostname;
-        if ("root".equals(username)) {
+        if ("root".equals(this.username)) {
             this.homeDir = "/root";
         } else {
             // 普通用户登录后自动创建 /home/<username>，避免找不到目录
-            this.homeDir = "/home/" + username;
-            fs.ensureHome(username);
+            this.homeDir = "/home/" + this.username;
+            fs.ensureHome(this.username);
         }
         this.cwd = this.homeDir;
+    }
+
+    /** 用户名清洗：仅保留常规 Linux 用户名字符，其余替换为下划线；清洗后为空回退 nobody */
+    static String sanitizeUser(String name) {
+        String s = name == null ? "" : name.replaceAll("[^a-zA-Z0-9._-]", "_").trim();
+        return s.isEmpty() ? "nobody" : s;
     }
 
     /** 提示符，如 root@svr01:~# */

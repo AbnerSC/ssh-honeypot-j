@@ -18,6 +18,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 /**
@@ -48,6 +49,10 @@ public class TelnetHoneypotServer {
     private final String hostname;
     /** 虚拟线程执行器：每个连接一条虚拟线程，替代 cachedThreadPool 平台线程，大幅降低并发连接内存开销 */
     private final ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
+    /** 最大并发连接数：超限直接断开（与数据库蜜罐一致的反连接洪泛保护；交互式协议略高于数据库蜜罐的 20） */
+    private static final int MAX_CONNECTIONS = 50;
+    /** 当前活跃连接计数 */
+    private final AtomicInteger activeConnections = new AtomicInteger();
     private volatile boolean running = true;
     private ServerSocket serverSocket;
 
@@ -82,13 +87,19 @@ public class TelnetHoneypotServer {
     }
 
     private void handleClient(Socket socket) {
+        // 并发连接限流：超限直接断开（Telnet 无标准超载响应，直接关闭与真实 telnetd 超载行为一致）
+        if (activeConnections.incrementAndGet() > MAX_CONNECTIONS) {
+            activeConnections.decrementAndGet();
+            try { socket.close(); } catch (IOException ignored) {}
+            return;
+        }
         String ip = socket.getInetAddress().getHostAddress();
         int clientPort = socket.getPort();
         String sessionId = logger.newSessionId();
         logger.sessionOpen(sessionId, "telnet", ip, clientPort);
         long start = System.currentTimeMillis();
         try (socket) {
-            socket.setSoTimeout(10 * 60 * 1000); // 10 分钟无操作自动断开
+            socket.setSoTimeout(60_000); // 认证阶段：1 分钟内未完成登录即断开（防扫描器长期挂连接）
             // 缓冲读取：登录阶段逐字符读用户名/密码，避免每字节一次底层系统调用
             PushbackInputStream in = new PushbackInputStream(new BufferedInputStream(socket.getInputStream(), 1024), 1);
             OutputStream out = socket.getOutputStream();
@@ -128,13 +139,16 @@ public class TelnetHoneypotServer {
             out.write(CRLF);
             out.flush();
 
-            // 进入伪 Shell
+            // 进入伪 Shell：放宽为 10 分钟无操作自动断开（交互会话需要更长空闲容忍）
+            socket.setSoTimeout(10 * 60 * 1000);
             SessionState state = new SessionState(sessionId, ip, username, fs, hostname);
             FakeShell shell = new FakeShell(in, out, state, processor, logger, st -> {});
             shell.run();
 
         } catch (IOException e) {
             logger.sessionClose(sessionId, ip, System.currentTimeMillis() - start);
+        } finally {
+            activeConnections.decrementAndGet();
         }
     }
 

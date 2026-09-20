@@ -12,7 +12,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -70,14 +72,18 @@ public class AuditLogRepository implements AutoCloseable {
             Map.entry("DELETE /api/users/{id}", "删除用户")
     );
 
+    /** 写入连接：仅由单线程 writer 独占使用（建表 + 异步 INSERT），不与 Web 查询线程共享 */
     private final Connection conn;
+    /** 查询连接串：list/trend 每次开独立只读短连接，避免 Jetty 多线程并发共用单条 SQLite 连接 */
+    private final String dbUrl;
     private final ExecutorService writer;
     /** IP 归属地定位器（可为 null，此时归属地留空） */
     private final IpLocator ipLocator;
 
     public AuditLogRepository(Path dbFile, IpLocator ipLocator) throws SQLException {
         this.ipLocator = ipLocator;
-        this.conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.toAbsolutePath());
+        this.dbUrl = "jdbc:sqlite:" + dbFile.toAbsolutePath();
+        this.conn = DriverManager.getConnection(dbUrl);
         try (Statement st = conn.createStatement()) {
             st.execute("PRAGMA busy_timeout=5000");
             st.execute("PRAGMA cache_size=-600"); // 页缓存收紧至约 600KB，降低常驻原生内存
@@ -198,7 +204,7 @@ public class AuditLogRepository implements AutoCloseable {
         }
 
         long total;
-        try (PreparedStatement ps = conn.prepareStatement(
+        try (Connection c = openReadOnly(); PreparedStatement ps = c.prepareStatement(
                 "SELECT COUNT(*) FROM sys_audit_log" + where)) {
             bind(ps, params);
             try (ResultSet rs = ps.executeQuery()) {
@@ -209,7 +215,7 @@ public class AuditLogRepository implements AutoCloseable {
         String sql = "SELECT * FROM sys_audit_log" + where
                 + " ORDER BY epoch_ms DESC, id DESC LIMIT ? OFFSET ?";
         List<Map<String, Object>> rows = new ArrayList<>(Math.min(size, 200));
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+        try (Connection c = openReadOnly(); PreparedStatement ps = c.prepareStatement(sql)) {
             bind(ps, params);
             ps.setInt(params.size() + 1, size);
             ps.setLong(params.size() + 2, (long) (page - 1) * size);
@@ -238,12 +244,14 @@ public class AuditLogRepository implements AutoCloseable {
 
     /** 审计日志按日趋势（近 N 天）：总操作数 / 失败数 */
     public List<Map<String, Object>> trend(int days) throws SQLException {
-        String since = LocalDateTime.now().minusDays(days - 1L).format(DateTimeFormatter.ISO_LOCAL_DATE);
+        // 以 epoch 毫秒做范围过滤命中 idx_audit_epoch 索引；原先 substr(ts) 字符串比较无法走索引、需全表扫描
+        long sinceMs = LocalDate.now().minusDays(days - 1L)
+                .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         List<Map<String, Object>> rows = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(
+        try (Connection c = openReadOnly(); PreparedStatement ps = c.prepareStatement(
                 "SELECT substr(ts,1,10) d, COUNT(*) c, SUM(ok = 0) f"
-                        + " FROM sys_audit_log WHERE substr(ts,1,10) >= ? GROUP BY d ORDER BY d")) {
-            ps.setString(1, since);
+                        + " FROM sys_audit_log WHERE epoch_ms >= ? GROUP BY d ORDER BY d")) {
+            ps.setLong(1, sinceMs);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     Map<String, Object> m = new LinkedHashMap<>();
@@ -255,6 +263,16 @@ public class AuditLogRepository implements AutoCloseable {
             }
         }
         return rows;
+    }
+
+    /** 每次查询开独立只读短连接：query_only 防误写，busy_timeout 消除与蜜罐写入的偶发锁竞争 */
+    private Connection openReadOnly() throws SQLException {
+        Connection c = DriverManager.getConnection(dbUrl);
+        try (Statement st = c.createStatement()) {
+            st.execute("PRAGMA busy_timeout=5000");
+            st.execute("PRAGMA query_only=ON");
+        }
+        return c;
     }
 
     private static void bind(PreparedStatement ps, List<Object> params) throws SQLException {
@@ -282,8 +300,8 @@ public class AuditLogRepository implements AutoCloseable {
     // ============================ 脱敏工具 ============================
 
     /**
-     * 请求体脱敏：JSON 对象中 password / oldPassword / newPassword 字段替换为 ***。
-     * 非 JSON 或解析失败时原样返回（截断由调用方负责）。
+     * 请求体脱敏：JSON 对象中 password / oldPassword / newPassword 字段替换为 ***，
+     * 结果统一截断至 2000 字符，防止超大请求体撑爆审计表。
      */
     public static String maskBody(String body) {
         if (body == null || body.isBlank()) return null;
@@ -294,9 +312,9 @@ public class AuditLogRepository implements AutoCloseable {
                     obj.addProperty(key, "***");
                 }
             }
-            return GSON.toJson(obj);
+            return truncate(GSON.toJson(obj));
         } catch (Exception e) {
-            return body;
+            return truncate(body);
         }
     }
 
