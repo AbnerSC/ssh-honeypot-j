@@ -113,6 +113,17 @@ log:
   ipdb_v6: db/ip2region_v6.xdb  # IP 归属地离线库文件（ip2region xdb 格式 ipv6），解析来源 IP 为“国家 省份 城市”；
   # 可选覆盖项：文件缺失时自动回退使用 jar 内置库（已随包打包），均缺失时归属地留空，不影响其他功能
 
+# 大模型命令仿真（默认关闭）：伪 Shell 未覆盖的未知命令交给大模型生成仿真输出，
+# 未启用或服务不可用（超时/限流/熔断）时自动降级本地 "-bash: xxx: command not found"；
+# 支持环境变量覆盖（AI_ENABLED / AI_BASE_URL / AI_API_KEY / AI_MODEL_NAME 等，见 Docker 部署一节）
+ai:
+  enabled: false     # 是否启用大模型命令仿真（false 时未知命令完全走本地 command not found）
+  base_url: ""       # 大模型服务地址（OpenAI 兼容接口，自动补全 /v1 后缀）
+  api_key: ""        # 大模型服务 API 密钥（本地无鉴权服务可留空）
+  model_name: ""     # 大模型服务模型名称
+  timeout_seconds: 20     # 单次请求超时（秒），超时立即降级本地 command not found
+  max_concurrent: 1       # 全局并发请求上限，超出立即降级不排队
+
 # Web 可视化控制台：攻击日志统计与明细查询、系统用户管理（与蜜罐同进程部署）
 # 首次启动自动创建默认管理员 admin/admin123，登录后强制修改密码
 web:
@@ -122,6 +133,7 @@ web:
 ```
 
 配置文件不存在时使用内置默认值（SSH:2222、Telnet:2323、日志 logs/honeypot.jsonl、Web:8080）。
+`ai` 段支持环境变量覆盖，优先级：环境变量（`AI_*`）> 配置文件 > 内置默认值，变量清单见 Docker 部署一节。
 
 ### 账号配置多密码
 
@@ -184,6 +196,11 @@ services:
       - ${PWD}/db:/app/db      # 挂载宿主机数据库目录
     environment:
       - TZ=Asia/Shanghai       # 时区，北京时间
+      # AI 大模型命令仿真（默认关闭；启用需改 AI_ENABLED=true 并补全 BASE_URL/MODEL_NAME，详见下文说明）
+      - AI_ENABLED=false            # 是否启用大模型命令仿真
+      - AI_BASE_URL=                # OpenAI 兼容接口地址，如 http://172.16.10.112:8000/v1
+      - AI_API_KEY=                 # API 密钥，本地无鉴权服务（vLLM/Ollama 等）可留空
+      - AI_MODEL_NAME=              # 模型名称，如 qwen3.5-2b
     ports:
       - 22:2222                # SSH端口
       - 23:2323                # Telnet端口
@@ -227,7 +244,44 @@ docker compose up -d
     - ${PWD}/db:/app/db
     - ${PWD}/config.yaml:/app/config.yaml
   ```
-  
+
+### AI 大模型命令仿真（可选）
+
+默认关闭（`ai.enabled=false`），未配置大模型服务时开箱即用，未知命令一律返回本地 `command not found`。
+启用后伪 Shell 未覆盖的未知命令（如 `./malware`、`nmap` 等）交给大模型生成仿真终端输出；
+服务不可用（超时/限流/熔断）时自动降级本地 `command not found`，不影响蜜罐其他功能。
+
+无需挂载配置文件，直接在 compose 的 `environment` 中配置，优先级：环境变量 > 挂载的 `config.yaml` > 镜像内置配置：
+
+| 环境变量               | 默认值  | 说明                                                                          |
+|------------------------|---------|-------------------------------------------------------------------------------|
+| `AI_ENABLED`           | `false` | 是否启用大模型命令仿真                                                        |
+| `AI_BASE_URL`          | 空      | OpenAI 兼容接口地址（自动补全 `/v1` 后缀），如 `http://172.16.10.200:8000/v1` |
+| `AI_API_KEY`           | 空      | API 密钥；本地无鉴权服务（vLLM/Ollama 等）可留空                              |
+| `AI_MODEL_NAME`        | 空      | 模型名称，如 `qwen3.5-2b`                                                     |
+| `AI_ENABLE_THINKING`   | `false` | 思考模式开关（混合推理模型经 chat_template_kwargs 透传），开启后建议调大超时  |
+| `AI_TIMEOUT_SECONDS`   | `20`    | 单次请求超时（秒），超时立即降级本地 command not found                        |
+| `AI_MAX_OUTPUT_CHARS`  | `8192`  | 单条输出最大字符数，超长截断                                                  |
+| `AI_MAX_CONCURRENT`    | `1`     | 全局并发请求上限，超出立即降级不排队                                          |
+| `AI_FAILURE_THRESHOLD` | `3`     | 连续失败达到该次数后触发熔断                                                  |
+| `AI_COOLDOWN_SECONDS`  | `300`   | 熔断时长（秒），期间不再请求大模型                                            |
+
+启用前提：`AI_ENABLED=true` 且 `AI_BASE_URL`、`AI_MODEL_NAME` 非空，否则自动视为未启用。
+
+> **命令路由规则**（优先级从高到低）：
+> 1. **本地专门仿真**：`ls`、`cat`、`systemctl`、`docker ps`、`apt`、`ifconfig` 等约两百个常见命令走本地硬编码响应，不消耗大模型请求；
+> 2. **版本查询本地常量**：`node -v`、`git --version`、`mvn -v`、`gcc --version`、`python3 --version` 等开发工具版本命令返回 `FakeEnv` 常量，与大模型提示词同源，交叉验证不穿帮；
+> 3. **AI 仿真 + 空串回退**：`docker pull`、`npm install`、`make`、`rsync`、`sed` 等已安装但本地无专门仿真的命令，优先交大模型生成真实输出，AI 不可用时回退空串（此类命令成功时多数本就无输出）；
+> 4. **AI 仿真 + not found 回退**：完全未知的命令（如 `./malware`、`nmap`）交大模型仿真，AI 不可用时回退本地 `command not found`。
+>
+> **环境人设统一**：蜜罐伪装为一台全栈开发者的 Ubuntu 22.04 服务器，开发工具链齐备
+> （docker/docker-compose/node/npm/go/rust/maven/gradle/php/composer/ruby/python 等）；
+> 渗透测试类工具（nmap/hydra/sqlmap/tcpdump 等）未安装，大模型对其如实回 `command not found`。
+> 所有环境硬事实（硬件/网络/用户/软件版本）集中定义在 `org.open.scdm.honeypot.env.FakeEnv`，
+> 本地命令输出与大模型 systemPrompt 同源引用，攻击者用任意命令交叉验证均口径一致。
+>
+> 验证 AI 是否生效可看容器启动日志：环境变量覆盖与「AI 命令仿真已启用」均有输出。
+
 登录：
 ```angular2html
 地址：http://127.0.0.1:8080

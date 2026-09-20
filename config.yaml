@@ -33,6 +33,23 @@ log:
   ipdb_v6: db/ip2region_v6.xdb  # IP 归属地离线库文件（ip2region xdb 格式 ipv6），解析来源 IP 为“国家 省份 城市”；
                             # 可选覆盖项：文件缺失时自动回退使用 jar 内置库（已随包打包），均缺失时归属地留空，不影响其他功能
 
+# 大模型命令仿真：伪 Shell 内置命令表未命中的未知命令（如 ./malware、nmap 等自定义工具）
+# 交给大模型生成仿真终端输出，避免千篇一律的 command not found 被识破；
+# 未启用/未配置或服务不可用（超时/限流/熔断）时自动降级：未知命令一律返回本地 "-bash: xxx: command not found"
+# Docker/compose 部署推荐用环境变量注入（AI_ENABLED / AI_BASE_URL / AI_API_KEY / AI_MODEL_NAME 等，
+# 优先级高于本文件，见 README），免挂载配置文件；默认关闭，不配置大模型服务开箱即用
+ai:
+  enabled: false     # 是否启用大模型命令仿真（false 时未知命令完全走本地 command not found）
+  base_url: ""       # 大模型服务地址（OpenAI 兼容接口，自动补全 /v1 后缀），如 http://127.0.0.1:8000
+  api_key: ""        # 大模型服务 API 密钥（本地无鉴权服务可留空）
+  model_name: ""     # 大模型服务模型名称，如 qwen3-2b
+  enable_thinking: false  # 是否开启模型思考模式（混合推理模型经 chat_template_kwargs 透传；开启后响应更慢，建议同步调大 timeout_seconds）
+  timeout_seconds: 20     # 单次请求超时（秒），超时立即降级本地兜底
+  max_output_chars: 8192  # 单条输出最大字符数：超长截断，防长输出撑爆小堆内存
+  max_concurrent: 1       # 全局并发请求上限：超出的命令立即降级不排队，防大模型服务被并发会话打爆
+  failure_threshold: 3    # 连续失败达到该次数后触发熔断
+  cooldown_seconds: 300   # 熔断时长（秒）：期间不再请求大模型，未知命令直接本地兜底
+
 # Web 可视化控制台：攻击日志统计与明细查询、系统用户管理（与蜜罐同进程部署）
 # 首次启动自动创建默认管理员 admin/admin123，登录后强制修改密码
 web:

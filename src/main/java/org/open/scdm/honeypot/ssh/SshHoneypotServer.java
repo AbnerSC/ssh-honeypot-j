@@ -1,5 +1,6 @@
 package org.open.scdm.honeypot.ssh;
 
+import org.open.scdm.honeypot.ai.AiClient;
 import org.open.scdm.honeypot.auth.CredentialGuard;
 import org.open.scdm.honeypot.fs.VirtualFileSystem;
 import org.open.scdm.honeypot.log.AttackLogger;
@@ -49,13 +50,13 @@ public class SshHoneypotServer {
     /** sessionId(ioSessionId) -> 登录用户名（auth 阶段写入，shell 阶段读取）；用 long 键避免每次 String 装箱与哈希开销 */
     private final Map<Long, String> sessionUsers = new ConcurrentHashMap<>();
 
-    public SshHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard, String hostname) {
+    public SshHoneypotServer(int port, VirtualFileSystem fs, AttackLogger logger, CredentialGuard guard, String hostname, AiClient ai) {
         this.port = port;
         this.fs = fs;
         this.logger = logger;
         this.guard = guard;
         this.hostname = hostname;
-        this.processor = new CommandProcessor(logger, hostname);
+        this.processor = new CommandProcessor(logger, hostname, ai);
     }
 
     public void start() throws IOException {
