@@ -177,9 +177,9 @@ public class AiClient implements AutoCloseable {
 
     /**
      * 系统提示词：注入会话状态与 FakeEnv 环境画像（硬件/网络/用户/软件清单与本地命令输出同源），
-     * 人设为全栈开发者的服务器——开发工具链已装（docker/node/go/maven 等），模型仿真成功输出；
-     * 渗透测试类工具未装（nmap/hydra/sqlmap 等），模型如实回 command not found；
-     * 强约束输出格式防止穿帮。
+     * 人设为全栈开发者的服务器——默认假定任意常规命令均已安装并成功执行，模型仿真真实输出；
+     * 仅当命令明确命中渗透测试类工具清单（nmap/hydra/sqlmap 等）时才回 command not found；
+     * 强约束输出格式与决策优先级，防止小模型保守地滥用 command not found 而穿帮。
      */
     private static String systemPrompt(String hostname, String username, String cwd, List<String> recent) {
         StringBuilder sb = new StringBuilder(2600);
@@ -193,16 +193,24 @@ public class AiClient implements AutoCloseable {
         if (recent != null && !recent.isEmpty()) {
             sb.append("Recently executed commands: ").append(String.join("; ", recent)).append(".\n");
         }
-        sb.append("Output rules:\n");
-        sb.append("- Reply with ONLY the exact terminal output (stdout/stderr) of the given command, verbatim. ")
-          .append("No explanations, no markdown, no code fences, no quotes around output.\n");
-        sb.append("- For INSTALLED software simulate a realistic successful output matching the command semantics ")
+        sb.append("Output rules (apply strictly in this order):\n");
+        sb.append("1. DEFAULT — assume the command EXISTS on this server and actually ran; produce its realistic ")
+          .append("stdout/stderr. This is a full-stack developer's production box: besides every toolchain listed under ")
+          .append("'Installed', it also has ALL standard Linux utilities (coreutils, bash, util-linux, procps, iproute2, ")
+          .append("findutils, grep, sed, awk, tar, curl, wget, git, ssh, sudo, and similar). When you are unsure whether a ")
+          .append("tool is present, ALWAYS assume it is and simulate a successful run.\n");
+        sb.append("2. Match the real semantics and flags of the command ")
           .append("(e.g. docker-compose pull -> per-service pulling progress then Done; npm install -> package progress; ")
-          .append("mvn clean package -> [INFO] ... BUILD SUCCESS; git log -> commit entries; systemctl status <unit> -> an active running unit).\n");
-        sb.append("- For NOT installed software reply exactly like: -bash: <name>: command not found\n");
-        sb.append("- If the command normally prints nothing, reply with empty output.\n");
-        sb.append("- Keep output within 30 lines; terse and technical, like real terminal output.\n");
-        sb.append("- Timestamps around September 2026, UTC, en_US.UTF-8 locale.");
+          .append("mvn clean package -> [INFO] ... BUILD SUCCESS; git log -> commit entries; systemctl status <unit> -> an active ")
+          .append("running unit; ./script or ./malware -> plausible program output and behaviour).\n");
+        sb.append("3. Reply with ONLY the exact terminal output, verbatim. ")
+          .append("No explanations, no markdown, no code fences, no quotes around output.\n");
+        sb.append("4. If the command normally prints nothing on success, reply with empty output.\n");
+        sb.append("5. SOLE EXCEPTION — reply '-bash: <name>: command not found' ONLY when the command is clearly a ")
+          .append("penetration-testing / traffic-analysis tool explicitly listed under 'NOT installed'. Never use this for ")
+          .append("any ordinary utility, dev tool, script, or binary.\n");
+        sb.append("6. Keep output within 30 lines; terse and technical, like real terminal output. ")
+          .append("Timestamps around September 2026, UTC, en_US.UTF-8 locale.");
         return sb.toString();
     }
 

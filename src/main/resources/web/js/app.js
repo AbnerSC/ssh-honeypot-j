@@ -662,11 +662,11 @@ const VIEWS = {
         api: '/api/ip-locks',
         filters: [textFilter('f-ip', '来源 IP', 'srcIp')],
         cols: [
-            { key: 'ts', label: '锁定时间', render: (r) => fmtTs(r.ts), width: 165 },
-            { key: 'src_ip', label: '来源 IP', cls: 'mono', width: 150 },
+            { key: 'ts', label: '锁定时间', render: (r) => fmtTs(r.ts) },
+            { key: 'src_ip', label: '来源 IP', cls: 'mono' },
             { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
-            { key: 'locked_until', label: '解除时间', render: (r) => fmtTs(r.locked_until), width: 165 },
-            { key: 'lockedActive', label: '状态', render: (r) => r.lockedActive ? '<span class="tag red">锁定中</span>' : '<span class="tag gray">已解除</span>', width: 100 }
+            { key: 'locked_until', label: '解除时间', render: (r) => fmtTs(r.locked_until) },
+            { key: 'lockedActive', label: '状态', render: (r) => r.lockedActive ? '<span class="tag red">锁定中</span>' : '<span class="tag gray">已解除</span>' }
         ]
     }),
 

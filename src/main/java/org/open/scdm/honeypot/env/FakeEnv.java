@@ -134,8 +134,10 @@ public final class FakeEnv {
                 + "listening services: " + LISTEN_PORTS + "; every external hostname resolves to " + WAN_IP + ".\n"
                 + "- Users: root(0), admin(1000), ubuntu(1001); sudo members: admin, ubuntu.\n"
                 + "- Running processes: systemd, sshd, mysqld, nginx worker, cron.\n"
-                + "- Installed (this is a full-stack developer's server, all common dev toolchains present): "
-                + INSTALLED + ".\n"
-                + "- NOT installed: " + NOT_INSTALLED + ".\n";
+                + "- Installed: ALL standard Ubuntu/Linux utilities (coreutils, bash, util-linux, procps, iproute2, "
+                + "findutils, grep, sed, awk, tar, gzip, curl, wget, git, ssh, sudo and similar) PLUS this full-stack "
+                + "developer's toolchains: " + INSTALLED + ". This list is illustrative, NOT exhaustive - treat any other "
+                + "ordinary command-line tool, script or binary as present too.\n"
+                + "- NOT installed (the ONLY commands that should ever yield 'command not found'): " + NOT_INSTALLED + ".\n";
     }
 }
