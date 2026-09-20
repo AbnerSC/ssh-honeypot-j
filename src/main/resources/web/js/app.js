@@ -10,6 +10,22 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtTs = (s) => (s ? String(s).replace('T', ' ').replace(/\.\d+$/, '') : '-');
 
+/**
+ * 生成 <th> 列宽内联样式。
+ * 支持两种写法：
+ *   width: 160       → style="width:160px"
+ *   width: '10%'     → style="width:10%"
+ *   width: '8em'     → style="width:8em"
+ *   width: 'auto'    → style="width:auto"
+ *   width: 不传/''  → 不输出 style（fixed 布局下该列等分剩余空间）
+ * 配合 CSS `table { table-layout: fixed }` 确保列宽严格生效，不被内容撑破。
+ */
+function thWidthStyle(w) {
+    if (w == null || w === '') return '';
+    const v = typeof w === 'number' ? w + 'px' : String(w).trim();
+    return v ? ` style="width:${v}"` : '';
+}
+
 function toast(msg) {
     let el = document.getElementById('toast');
     if (!el) {
@@ -247,7 +263,7 @@ function tableView(cfg) {
             </div>
             <div class="table-wrap">
                 <table>
-                    <thead><tr>${cfg.cols.map((c) => `<th${c.width ? ` style="width:${c.width}px"` : ''}>${c.label}</th>`).join('')}</tr></thead>
+                    <thead><tr>${cfg.cols.map((c) => `<th${thWidthStyle(c.width)}>${c.label}</th>`).join('')}</tr></thead>
                     <tbody id="tv-body"></tbody>
                 </table>
             </div>
@@ -368,14 +384,21 @@ async function showSessionCommands(sessionId) {
 // ============================ 用户管理 ============================
 
 function viewUsers(el) {
+    // 用户管理表列宽配置：与明细表一致采用 width 数字(px)/字符串(如 '10%') 两种写法
+    const cols = [
+        { label: 'ID', width: 60 },
+        { label: '用户名', width: 180 },
+        { label: '角色', width: 100 },
+        { label: '状态', width: 90 },
+        { label: '创建时间', width: 170 },
+        { label: '最近登录', width: 170 },
+        { label: '操作', width: 260 }
+    ];
     el.innerHTML = `
         <div class="filters"><button class="btn primary" id="u-add">＋ 新增用户</button></div>
         <div class="table-wrap">
             <table>
-                <thead><tr>
-                    <th>ID</th><th>用户名</th><th>角色</th><th>状态</th>
-                    <th>创建时间</th><th>最近登录</th><th>操作</th>
-                </tr></thead>
+                <thead><tr>${cols.map((c) => `<th${thWidthStyle(c.width)}>${c.label}</th>`).join('')}</tr></thead>
                 <tbody id="u-body"></tbody>
             </table>
         </div>`;
@@ -592,13 +615,13 @@ const VIEWS = {
             dateRangeFilter()
         ],
         cols: [
-            { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts) },
-            { key: 'src_ip', label: '来源 IP', cls: 'mono' },
-            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
-            { key: 'protocol', label: '协议', render: protoCell },
-            { key: 'username', label: '用户名', cls: 'mono' },
-            { key: 'password', label: '密码', cls: 'mono cell', title: true },
-            { key: 'success', label: '结果', render: (r) => r.success ? '<span class="tag green">放行(蜜罐)</span>' : '<span class="tag red">拒绝</span>' }
+            { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts), width: 165 },
+            { key: 'src_ip', label: '来源 IP', cls: 'mono', width: 140 },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-', width: 180 },
+            { key: 'protocol', label: '协议', render: protoCell, width: 90 },
+            { key: 'username', label: '用户名', cls: 'mono', width: 130 },
+            { key: 'password', label: '密码', cls: 'mono cell', title: true, width: 160 },
+            { key: 'success', label: '结果', render: (r) => r.success ? '<span class="tag green">放行(蜜罐)</span>' : '<span class="tag red">拒绝</span>', width: 110 }
         ]
     }),
 
@@ -612,12 +635,13 @@ const VIEWS = {
             dateRangeFilter()
         ],
         cols: [
-            { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts) },
-            { key: 'src_ip', label: '来源 IP', cls: 'mono' },
-            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
-            { key: 'username', label: '用户名', cls: 'mono' },
+            { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts), width: 165 },
+            { key: 'src_ip', label: '来源 IP', cls: 'mono', width: 140 },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-', width: 180 },
+            { key: 'username', label: '用户名', cls: 'mono', width: 130 },
+            // 命令列作为主内容区，不指定宽度 → fixed 布局下自动吸收剩余空间
             { key: 'command', label: '命令', cls: 'mono cell', title: true },
-            { key: 'session_id', label: '会话', cls: 'mono' }
+            { key: 'session_id', label: '会话', cls: 'mono', width: 160 }
         ]
     }),
 
@@ -625,10 +649,11 @@ const VIEWS = {
         api: '/api/downloads',
         filters: [textFilter('f-ip', '来源 IP', 'srcIp'), textFilter('f-kw', 'URL 关键字', 'keyword', 220), dateRangeFilter()],
         cols: [
-            { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts) },
-            { key: 'src_ip', label: '来源 IP', cls: 'mono' },
-            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
-            { key: 'username', label: '用户名', cls: 'mono' },
+            { key: 'ts', label: '时间', render: (r) => fmtTs(r.ts), width: 165 },
+            { key: 'src_ip', label: '来源 IP', cls: 'mono', width: 140 },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-', width: 180 },
+            { key: 'username', label: '用户名', cls: 'mono', width: 130 },
+            // URL 列自适应剩余空间
             { key: 'url', label: '恶意 URL', cls: 'mono cell', title: true }
         ]
     }),
@@ -637,11 +662,11 @@ const VIEWS = {
         api: '/api/ip-locks',
         filters: [textFilter('f-ip', '来源 IP', 'srcIp')],
         cols: [
-            { key: 'ts', label: '锁定时间', render: (r) => fmtTs(r.ts) },
-            { key: 'src_ip', label: '来源 IP', cls: 'mono' },
+            { key: 'ts', label: '锁定时间', render: (r) => fmtTs(r.ts), width: 165 },
+            { key: 'src_ip', label: '来源 IP', cls: 'mono', width: 150 },
             { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
-            { key: 'locked_until', label: '解除时间', render: (r) => fmtTs(r.locked_until) },
-            { key: 'lockedActive', label: '状态', render: (r) => r.lockedActive ? '<span class="tag red">锁定中</span>' : '<span class="tag gray">已解除</span>' }
+            { key: 'locked_until', label: '解除时间', render: (r) => fmtTs(r.locked_until), width: 165 },
+            { key: 'lockedActive', label: '状态', render: (r) => r.lockedActive ? '<span class="tag red">锁定中</span>' : '<span class="tag gray">已解除</span>', width: 100 }
         ]
     }),
 
@@ -658,17 +683,17 @@ const VIEWS = {
             dateRangeFilter()
         ],
         cols: [
-            { key: 'ts', label: '时间', render: (r) => esc(r.ts) },
-            { key: 'username', label: '操作用户', cls: 'mono', render: (r) => r.username || '<span class="tag gray">未登录</span>' },
-            { key: 'src_ip', label: '来源 IP', cls: 'mono' },
-            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-' },
-            { key: 'method', label: '方法', render: (r) => '<span class="tag">' + esc(r.method) + '</span>' },
-            { key: 'path', label: '路径', cls: 'mono cell', title: true },
-            { key: 'path_desc', label: '操作描述', render: (r) => r.path_desc ? esc(r.path_desc) : '-' },
-            { key: 'query', label: '查询参数', cls: 'mono cell', title: true, render: (r) => r.query ? esc(r.query) : '-' },
-            { key: 'req_body', label: '请求体', cls: 'mono cell', title: true, render: (r) => r.req_body ? esc(r.req_body) : '-' },
-            { key: 'status', label: '状态码', render: (r) => r.status < 400 ? '<span class="tag green">' + r.status + '</span>' : '<span class="tag red">' + r.status + '</span>' },
-            { key: 'duration_ms', label: '耗时', render: (r) => r.duration_ms + 'ms' }
+            { key: 'ts', label: '时间', render: (r) => esc(r.ts), width: 165 },
+            { key: 'username', label: '操作用户', cls: 'mono', render: (r) => r.username || '<span class="tag gray">未登录</span>', width: 120 },
+            { key: 'src_ip', label: '来源 IP', cls: 'mono', width: 140 },
+            { key: 'location', label: '归属地', render: (r) => r.location ? esc(r.location) : '-', width: 160 },
+            { key: 'method', label: '方法', render: (r) => '<span class="tag">' + esc(r.method) + '</span>', width: 90 },
+            { key: 'path', label: '路径', cls: 'mono cell', title: true, width: 220 },
+            { key: 'path_desc', label: '操作描述', render: (r) => r.path_desc ? esc(r.path_desc) : '-', width: 140 },
+            { key: 'query', label: '查询参数', cls: 'mono cell', title: true, render: (r) => r.query ? esc(r.query) : '-', width: 180 },
+            { key: 'req_body', label: '请求体', cls: 'mono cell', title: true, render: (r) => r.req_body ? esc(r.req_body) : '-', width: 180 },
+            { key: 'status', label: '状态码', render: (r) => r.status < 400 ? '<span class="tag green">' + r.status + '</span>' : '<span class="tag red">' + r.status + '</span>', width: 90 },
+            { key: 'duration_ms', label: '耗时', render: (r) => r.duration_ms + 'ms', width: 90 }
         ]
     }),
 

@@ -193,12 +193,23 @@ input::placeholder { color: #54688a; }
     border-radius: 10px;
     overflow: auto;
 }
-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
-th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+/* table-layout:fixed —— 列宽严格按 <th style="width:..."> 或 <col> 分配，
+   避免 auto 布局下被内容（尤其 white-space:nowrap）撑破配置宽度。
+   未指定宽度的列会等分剩余空间。 */
+table { width: 100%; border-collapse: collapse; table-layout: fixed; white-space: nowrap; }
+th, td {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 th { color: var(--text2); font-weight: 600; background: #0d1526; position: sticky; top: 0; }
 tbody tr:hover td { background: rgba(34, 211, 238, .05); }
 td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
-td.cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+/* 长文本列（命令/URL/路径等）：完整内容靠 title 悬停提示；
+   fixed 布局下宽度已由 <th> 控制，无需再限 max-width */
+td.cell { overflow: hidden; text-overflow: ellipsis; }
 .pager { display: flex; gap: 8px; align-items: center; margin-top: 14px; color: var(--text2); flex-wrap: wrap; }
 .pager input { width: 56px; }
 
