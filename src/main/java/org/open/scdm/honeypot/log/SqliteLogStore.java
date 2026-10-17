@@ -45,6 +45,8 @@ public class SqliteLogStore implements AutoCloseable {
             )""",
             "CREATE INDEX IF NOT EXISTS idx_sessions_src_ip ON sessions(src_ip)",
             "CREATE INDEX IF NOT EXISTS idx_sessions_opened ON sessions(opened_epoch_ms)",
+            // 协议分布统计走覆盖索引，避免大表全表扫描
+            "CREATE INDEX IF NOT EXISTS idx_sessions_protocol ON sessions(protocol)",
             """
             CREATE TABLE IF NOT EXISTS auth_attempts (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +63,9 @@ public class SqliteLogStore implements AutoCloseable {
             "CREATE INDEX IF NOT EXISTS idx_auth_src_ip ON auth_attempts(src_ip)",
             "CREATE INDEX IF NOT EXISTS idx_auth_username ON auth_attempts(username)",
             "CREATE INDEX IF NOT EXISTS idx_auth_ts ON auth_attempts(ts_epoch_ms)",
+            // 口令排行 / 地区排行统计走覆盖索引，避免大表全表扫描
+            "CREATE INDEX IF NOT EXISTS idx_auth_password ON auth_attempts(password)",
+            "CREATE INDEX IF NOT EXISTS idx_auth_location ON auth_attempts(location)",
             """
             CREATE TABLE IF NOT EXISTS commands (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,

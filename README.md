@@ -48,7 +48,7 @@ https://github.com/AbnerSC/ssh-honeypot-j.git
 | 类别 | 技术 | 版本 | 用途 |
 | --- | --- | --- | --- |
 | 语言 / 运行时 | Java | 25 | 开发语言，启用紧凑对象头（JEP 519）等运行时优化 |
-| SSH 协议 | Apache MINA SSHD | 2.19.0 | 实现 SSH 服务端与协议交互 |
+| SSH 协议 | Apache MINA SSHD | 3.0.0-M6 | 实现 SSH 服务端与协议交互 |
 | Telnet 协议 | 原生 Socket | - | 实现 Telnet 协议与 IAC 终端协商 |
 | Web 控制台 | Javalin（Jetty 12） | 7.2.3 | 轻量嵌入式 Web 框架，承载管理 API 与静态前端 |
 | 前端图表 | ECharts（WebJar） | 6.1.0 | 攻击统计图表，随 fat-jar 打包离线可用 |

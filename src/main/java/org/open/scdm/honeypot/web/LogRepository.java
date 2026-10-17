@@ -10,9 +10,11 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 攻击日志只读查询仓库：Web 控制台统计与明细查询的数据源。
@@ -27,7 +29,15 @@ import java.util.Map;
  */
 public class LogRepository implements AutoCloseable {
 
+    /** 统计类接口结果缓存有效期：百万级行表上的全量聚合代价高，Dashboard 每次切入会并发拉取 7 个统计接口，
+     *  短 TTL 缓存可 collapsing 重复扫描；统计展示容忍分钟级延迟 */
+    private static final long STATS_TTL_MS = 60_000L;
+
     private final String dbUrl;
+    private final Map<String, CachedStat> statCache = new ConcurrentHashMap<>();
+
+    /** 缓存条目：到期时间 + 结果（存储前由调用方保证不可变或不再修改） */
+    private record CachedStat(long untilMs, Object value) {}
 
     public LogRepository(Path dbFile) {
         this.dbUrl = "jdbc:sqlite:" + dbFile.toAbsolutePath();
@@ -39,13 +49,43 @@ public class LogRepository implements AutoCloseable {
         try (Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=5000");
             st.execute("PRAGMA query_only=ON");
-            st.execute("PRAGMA cache_size=-600"); // 只读小查询，页缓存收紧至约 600KB
+            // 百万级行表聚合排序需要更大页缓存，收紧至 600KB 会频繁回读磁盘；
+            // 仅只读连接调大，写连接（SqliteLogStore）维持小缓存降低常驻内存
+            st.execute("PRAGMA cache_size=-4096"); // 页缓存约 4MB
         }
         return c;
     }
 
+    /** 统计查询接口：允许抛受检 SQLException，便于缓存包装透传 */
+    @FunctionalInterface
+    private interface StatQuery<T> { T get() throws SQLException; }
+
+    /** 统计查询缓存包装：TTL 内命中直接返回缓存，过期后重新查询并刷新缓存。
+     *  并发过期瞬间可能重复查询一次，对统计场景可接受 */
+    @SuppressWarnings("unchecked")
+    private <T> T cachedStat(String key, StatQuery<T> query) throws SQLException {
+        CachedStat hit = statCache.get(key);
+        long now = System.currentTimeMillis();
+        if (hit != null && hit.untilMs() > now) return (T) hit.value();
+        try {
+            T value = query.get();
+            statCache.put(key, new CachedStat(now + STATS_TTL_MS, value));
+            return value;
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            // 不会发生：仅捕获查询声明的 SQLException 之外异常
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** 总览统计：各事件总量、独立攻击源 IP 数、今日新增、当前生效锁定 IP 数 */
     public Map<String, Object> overview() throws SQLException {
+        // 缓存键含当日日期：跨日 midnight 后键变化自动失效，不会把“今日新增”缓存成昨天
+        return Collections.unmodifiableMap(cachedStat("overview:" + LocalDate.now(), this::queryOverview));
+    }
+
+    private Map<String, Object> queryOverview() throws SQLException {
         long todayStart = LocalDate.now().atStartOfDay().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
         Map<String, Object> m = new LinkedHashMap<>();
         try (Connection conn = open(); PreparedStatement ps = conn.prepareStatement("""
@@ -80,6 +120,11 @@ public class LogRepository implements AutoCloseable {
 
     /** 最近 N 天按日趋势：会话 / 登录尝试 / 命令执行 */
     public List<Map<String, Object>> trend(int days) throws SQLException {
+        // 缓存键含当日日期：趋势窗口随日滑动，跨日自动失效
+        return cachedStat("trend:" + days + ":" + LocalDate.now(), () -> queryTrend(days));
+    }
+
+    private List<Map<String, Object>> queryTrend(int days) throws SQLException {
         Map<String, long[]> byDay = new LinkedHashMap<>();
         // 时间下界换算为 epoch 毫秒：WHERE 命中 opened_epoch_ms / ts_epoch_ms 索引，
         // 避免按 substr(ts,1,10) 字符串比较导致索引失效、大表全表扫描
@@ -107,16 +152,22 @@ public class LogRepository implements AutoCloseable {
 
     /** 会话数按协议分布 */
     public List<Map<String, Object>> protocolDist() throws SQLException {
-        return list("SELECT protocol AS name, COUNT(*) AS value FROM sessions GROUP BY protocol ORDER BY value DESC");
+        return cachedStat("protocol", () ->
+                list("SELECT protocol AS name, COUNT(*) AS value FROM sessions GROUP BY protocol ORDER BY value DESC"));
     }
 
     /** 攻击源 IP 排行（按登录尝试次数） */
     public List<Map<String, Object>> topIps(int limit) throws SQLException {
-        return listLimit("SELECT src_ip AS name, COUNT(*) AS value FROM auth_attempts GROUP BY src_ip ORDER BY value DESC LIMIT ?", limit);
+        return cachedStat("topIps:" + limit, () ->
+                listLimit("SELECT src_ip AS name, COUNT(*) AS value FROM auth_attempts GROUP BY src_ip ORDER BY value DESC LIMIT ?", limit));
     }
 
     /** 攻击源地区排行（按登录尝试次数，国内按省份、国外按国家聚合，空值归入“未知”） */
     public List<Map<String, Object>> topLocations(int limit) throws SQLException {
+        return cachedStat("topLocations:" + limit, () -> queryTopLocations(limit));
+    }
+
+    private List<Map<String, Object>> queryTopLocations(int limit) throws SQLException {
         Map<String, Long> byRegion = new LinkedHashMap<>();
         try (Connection conn = open(); Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(
                 "SELECT location, COUNT(*) FROM auth_attempts GROUP BY location")) {
@@ -143,12 +194,14 @@ public class LogRepository implements AutoCloseable {
 
     /** 被爆破用户名排行 */
     public List<Map<String, Object>> topUsernames(int limit) throws SQLException {
-        return listLimit("SELECT username AS name, COUNT(*) AS value FROM auth_attempts GROUP BY username ORDER BY value DESC LIMIT ?", limit);
+        return cachedStat("topUsernames:" + limit, () ->
+                listLimit("SELECT username AS name, COUNT(*) AS value FROM auth_attempts GROUP BY username ORDER BY value DESC LIMIT ?", limit));
     }
 
     /** 被尝试口令排行 */
     public List<Map<String, Object>> topPasswords(int limit) throws SQLException {
-        return listLimit("SELECT password AS name, COUNT(*) AS value FROM auth_attempts GROUP BY password ORDER BY value DESC LIMIT ?", limit);
+        return cachedStat("topPasswords:" + limit, () ->
+                listLimit("SELECT password AS name, COUNT(*) AS value FROM auth_attempts GROUP BY password ORDER BY value DESC LIMIT ?", limit));
     }
 
     /** 会话明细（分页，支持来源 IP / 协议 / 时间范围过滤） */
