@@ -13,8 +13,8 @@
 https://github.com/AbnerSC/ssh-honeypot-j.git
 
 ## 说明
-已使用Go重构，本项目不再更新。
-仓库地址：https://github.com/AbnerSC/ssh-honeypot-go.git
+> 已使用Go重构，本项目不再更新。
+### Golang版本仓库地址：https://github.com/AbnerSC/ssh-honeypot-go.git
 
 [![GitHub Stars](https://img.shields.io/github/stars/AbnerSC/ssh-honeypot-j?style=flat&label=Stars)](https://github.com/AbnerSC/ssh-honeypot-j/stargazers)
 [![Docker Pulls](https://img.shields.io/docker/pulls/babyfly/ssh-honeypot-j?label=Docker%20Pulls)](https://hub.docker.com/r/babyfly/ssh-honeypot-j)
