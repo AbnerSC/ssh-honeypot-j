@@ -315,41 +315,6 @@ ssh -p 2222 root@127.0.0.1 "uname -a; cat /etc/passwd"
 - [X] 支持shell命令随机延时，避免直接回应，让蜜罐表现更真实
 - [X] 支持LLM，让大模型自动回应shell命令，让蜜罐表现更真实
 
-## 功能截图
-
-- 攻击总览
-<div style="text-align: center;">
-  <img src="docs/images/p1.png" alt="NetGazer Screenshot" style="width: 100%;"/>
-</div>
-- 攻击总览
-<div style="text-align: center;">
-  <img src="docs/images/p2.png" alt="NetGazer Screenshot" style="width: 100%;"/>
-</div>
-- 会话记录
-<div style="text-align: center;">
-  <img src="docs/images/p3.png" alt="NetGazer Screenshot" style="width: 100%;"/>
-</div>
-- 登录尝试
-<div style="text-align: center;">
-  <img src="docs/images/p4.png" alt="NetGazer Screenshot" style="width: 100%;"/>
-</div>
-- 命令记录
-<div style="text-align: center;">
-  <img src="docs/images/p5.png" alt="NetGazer Screenshot" style="width: 100%;"/>
-</div>
-- IP锁定
-<div style="text-align: center;">
-  <img src="docs/images/p6.png" alt="NetGazer Screenshot" style="width: 100%;"/>
-</div>
-- 操作审计
-<div style="text-align: center;">
-  <img src="docs/images/p7.png" alt="NetGazer Screenshot" style="width: 100%;"/>
-</div>
-- 用户管理
-<div style="text-align: center;">
-  <img src="docs/images/p8.png" alt="NetGazer Screenshot" style="width: 100%;"/>
-</div>
-
 ## 版本历史
 
 ### release-v1.2.0（2026-09-20）
